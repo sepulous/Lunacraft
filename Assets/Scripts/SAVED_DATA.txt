@@ -1,0 +1,28 @@
+Directory Structure
+---------------------------------
+
+/Lunacraft
+    /moons
+        /moon0
+            /chunks
+                sb???.dat
+                sb???.dat
+            moon.dat
+            player.dat
+        /moon1
+        /moon2
+        /moon3
+    options.dat
+
+
+
+
+Data Files (remaining)
+---------------------------------
+
+
+player.dat
+    - Position
+    - Orientation
+    - Inventory
+

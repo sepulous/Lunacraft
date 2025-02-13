@@ -1,0 +1,18 @@
+
+
+* I don't think rendering will be easy to multithread, but fortunately I don't think it needs to be anyway
+    - Chunk generation should definitely be multithreaded
+        - Generation can easily be made a job that returns a 1D NativeArray of bytes, which can later be written to disk
+
+* I should let renderDistance correspond to blocks, not chunks. Then I can just load planes of blocks instead of entire chunks
+    - Render distance slider could go in multiples of 8 blocks (or whatever)
+    - Should I preallocate block arrays to MAX_RENDER_DISTANCE * CHUNK_EXTENT? Then just index into it based on renderDistance?
+        - Then there's no need to resize them dynamically, which is probably painful
+
+* Although I hate to take on the performance hit, I really should compress chunk files
+
+* Why should the renderer have to read files? Why not just have a ChunkManager that generates and loads chunks, and have ChunkRenderer access the
+  data already in memory?
+
+
+FIRST: There are MANY chunks around the player, so let's start with rendering new ones dynamically. We can do generation of new ones later.
