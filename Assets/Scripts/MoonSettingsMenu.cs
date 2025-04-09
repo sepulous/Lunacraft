@@ -8,11 +8,23 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
 
+[Serializable]
+public class MoonData
+{
+    public int moon;
+    public ulong seed;
+    public long distanceTraveled;
+    public long worldTime;
+    public bool isCreative;
+    public int treeCover;
+    public int terrainRoughness;
+    public int wildlifeLevel;
+}
+
 public class MoonSettingsMenu : MonoBehaviour
 {
     public Slider treeCover;
     public Slider terrainRoughness;
-    public Slider exoticTerrain;
     public Slider wildlifeLevel;
     public ModeButton creativeModeButton;
     public TMP_Text seed;
@@ -38,13 +50,13 @@ public class MoonSettingsMenu : MonoBehaviour
             }
         }
         Debug.Log(moonData.seed);
+        moonData.moon = moon;
         moonData.distanceTraveled = 0;
         moonData.worldTime = 0;
         moonData.isCreative = creativeModeButton.IsEnabled();
-        moonData.treeCover = treeCover.value;
-        moonData.terrainRoughness = terrainRoughness.value;
-        moonData.exoticTerrain = exoticTerrain.value;
-        moonData.wildlifeLevel = wildlifeLevel.value;
+        moonData.treeCover = (int)treeCover.value;
+        moonData.terrainRoughness = (int)terrainRoughness.value;
+        moonData.wildlifeLevel = (int)wildlifeLevel.value;
         using (FileStream file = File.Open(moonDataFile, FileMode.Create, FileAccess.Write))
             (new BinaryFormatter()).Serialize(file, moonData);
 

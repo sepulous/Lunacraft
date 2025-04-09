@@ -35,9 +35,9 @@ public class OptionsManager : MonoBehaviour
             defaultOptions.showFog = true;
             defaultOptions.showGUI = true;
             defaultOptions.showDebugInfo = false;
-            defaultOptions.sfxVolume = 1F;
-            defaultOptions.musicVolume = 1F;
-            defaultOptions.sensitivity = 0.5F;
+            defaultOptions.sfxVolume = 0.5F;
+            defaultOptions.musicVolume = 0.5F;
+            defaultOptions.sensitivity = 1F;
             
             using (FileStream fileStream = new FileStream(optionsPath, FileMode.Create, FileAccess.Write))
                 formatter.Serialize(fileStream, defaultOptions);

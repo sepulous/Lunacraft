@@ -15,6 +15,7 @@ public class DebugInfo : MonoBehaviour
     public TMP_Text fpsText;
     public TMP_Text globalPosText;
     public TMP_Text chunkPosText;
+    public TMP_Text selectedPosText;
     public TMP_Text memoryReservedText;
     public TMP_Text memoryUsedText;
     public TMP_Text memoryFreeText;
@@ -79,6 +80,18 @@ public class DebugInfo : MonoBehaviour
             globalPosText.text = string.Format("Global Position: ({0}, {1}, {2})", player.transform.position.x.ToString("0.0"), player.transform.position.y.ToString("0.0"), player.transform.position.z.ToString("0.0"));
             chunkPosText.text = string.Format("Chunk Position: ({0}, {1})", playerChunkX, playerChunkZ);
 
+            // Selected block position
+            GameObject selectedBlock = player.GetSelectedBlock();
+            if (selectedBlock != null)
+            {
+                Vector3 selectedBlockPos = selectedBlock.transform.position;
+                selectedPosText.text = $"Selected Position: ({(int)selectedBlockPos.x}, {(int)selectedBlockPos.y}, {(int)selectedBlockPos.z})";
+            }
+            else
+            {
+                selectedPosText.text = $"Selected Position: ";
+            }
+
             // Memory usage
             int reservedMemory = (int)(Profiler.GetTotalReservedMemoryLong() / 1000000);
             int usedMemory = (int)(Profiler.GetTotalAllocatedMemoryLong() / 1000000);
@@ -89,7 +102,7 @@ public class DebugInfo : MonoBehaviour
 
             // Chunk generation rate
             float chunksPerSecond = chunkManager.GetChunkGenerationRate();
-            chunkGenText.text = $"Chunk Generation: {chunksPerSecond}/s";
+            chunkGenText.text = $"Chunk Generation: {chunksPerSecond:F2}/s";
         }
     }
 

@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using StarterAssets;
 
 public class PauseMenu : MonoBehaviour
 {
@@ -45,6 +44,7 @@ public class PauseMenu : MonoBehaviour
     {
         GameObject.Find("ChunkManager").GetComponent<ChunkManager>().SaveAllChunksToFile();
         GameObject.Find("Player").GetComponent<Player>().SavePlayerData();
+        GameObject.Find("WorldClock").GetComponent<WorldClock>().SaveWorldTime();
         SceneManager.LoadScene(0);
     }
 

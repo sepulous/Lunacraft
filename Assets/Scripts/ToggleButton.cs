@@ -7,7 +7,6 @@ public class ToggleButton : MonoBehaviour
 {
     public Sprite disabledSprite;
     public Sprite enabledSprite;
-
     private bool enabled = false;
 
     public void ToggleEnabled()

@@ -15,7 +15,7 @@ public class OptionsMenu : MonoBehaviour
 
     void Awake()
     {
-        DontDestroyOnLoad(gameObject);
+        //DontDestroyOnLoad(gameObject);
     }
 
     // OptionsManager loads these values in Awake()
@@ -31,17 +31,30 @@ public class OptionsMenu : MonoBehaviour
         sensitivity.value = options.sensitivity;
     }
 
-    public void UpdateOptions()
+    public void UpdateOptions(bool closeMenu)
     {
-        Options newOptions = new Options();
-        newOptions.renderDistance = (int)renderDistance.value;
-        newOptions.showFog = showFog.IsEnabled();
-        newOptions.showGUI = showGUI.IsEnabled();
-        newOptions.showDebugInfo = debugInfo.IsEnabled();
-        newOptions.sfxVolume = sfxVolume.value;
-        newOptions.musicVolume = musicVolume.value;
-        newOptions.sensitivity = sensitivity.value;
-        OptionsManager.UpdateCurrentOptions(newOptions);
-        gameObject.SetActive(false);
+        Options options = new Options();
+        options.renderDistance = (int)renderDistance.value;
+        options.showFog = showFog.IsEnabled();
+        options.showGUI = showGUI.IsEnabled();
+        options.showDebugInfo = debugInfo.IsEnabled();
+        options.sfxVolume = sfxVolume.value;
+        options.musicVolume = musicVolume.value;
+        options.sensitivity = sensitivity.value;
+        OptionsManager.UpdateCurrentOptions(options);
+        gameObject.SetActive(!closeMenu);
+    }
+
+    public void ToggleFog()
+    {
+        showFog.ToggleEnabled();
+        RenderSettings.fogColor = new Color(RenderSettings.fogColor.r, RenderSettings.fogColor.g, RenderSettings.fogColor.b, showFog.IsEnabled() ? 1 : 0);
+        UpdateOptions(false);
+    }
+
+    public void ToggleGUI()
+    {
+        showGUI.ToggleEnabled();
+        UpdateOptions(false);
     }
 }

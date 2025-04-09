@@ -8,10 +8,14 @@ public class ModeButton : MonoBehaviour
     public Sprite disabledSprite;
     public Sprite enabledSprite;
     public GameObject otherModeButton;
-    public bool creativeMode;
+    public bool creativeMode = false;
     public GameObject modeDescription;
-
     private bool enabled = false;
+
+    void Awake()
+    {
+        enabled = creativeMode;
+    }
 
     public void ToggleEnabled()
     {
