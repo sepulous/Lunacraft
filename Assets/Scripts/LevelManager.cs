@@ -69,8 +69,9 @@ public class LevelManager : MonoBehaviour
         blockMesh = MeshData.GetBlockMesh();
 
         // Delete chunks that may have persisted from Game scene (marked with DontDestroyOnLoad() from below)
-        foreach (GameObject chunk in GameObject.FindGameObjectsWithTag("Chunk"))
-            Destroy(chunk);
+        GameObject chunkParent = GameObject.Find("ChunkParent");
+        if (chunkParent != null)
+            Destroy(chunkParent);
     }
 
     public void Update()
@@ -194,6 +195,8 @@ public class LevelManager : MonoBehaviour
                                 blockObj.GetComponent<MeshFilter>().mesh = blockMesh;
                                 blockObj.GetComponent<Renderer>().material = blockMaterials[(int)block];
                                 blockObj.GetComponent<BoxCollider>().size = new Vector3(0.98F, 0.98F, 0.98F);
+                                blockObj.GetComponent<BoxCollider>().material.dynamicFriction = 0;
+                                blockObj.GetComponent<BoxCollider>().material.staticFriction = 0;
 
                                 BlockData blockData = blockObj.AddComponent<BlockData>();
                                 blockData.blockID = block;
@@ -225,108 +228,40 @@ public class LevelManager : MonoBehaviour
                 {
                     foreach (MobData mobData in mobs)
                     {
+                        if (mobData == null)
+                        {
+                            Debug.Log("NULL MOB DATA");
+                            continue;
+                        }
+
+                        Vector3 mobPosition = new Vector3(
+                            mobData.positionX,
+                            mobData.positionY,
+                            mobData.positionZ
+                        );
+                        Quaternion mobRotation = Quaternion.Euler(
+                            0,
+                            mobData.rotationY,
+                            0
+                        );
+
                         if (mobData.mobID == 0) // Green mob
                         {
-                            GameObject mob = Instantiate(greenMobPrefab);
-                            mob.transform.SetParent(chunk.transform); // Necessary so mobs are preserved across scene load
-                            mob.transform.position = new Vector3(
-                                mobData.positionX,
-                                mobData.positionY,
-                                mobData.positionZ
-                            );
-                            mob.transform.rotation = Quaternion.Euler(
-                                0,
-                                mobData.rotationY,
-                                0
-                            );
+                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunk.transform);
                         }
                         else if (mobData.mobID == 1) // Brown mob
                         {
-                            GameObject mob = Instantiate(brownMobPrefab);
-                            mob.transform.SetParent(chunk.transform); // Necessary so mobs are preserved across scene load
-                            mob.transform.position = new Vector3(
-                                mobData.positionX,
-                                mobData.positionY,
-                                mobData.positionZ
-                            );
-                            mob.transform.rotation = Quaternion.Euler(
-                                0,
-                                mobData.rotationY,
-                                0
-                            );
+                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunk.transform);
+                            mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
                         }
                         else if (mobData.mobID == 2) // Space giraffe
                         {
-                            GameObject mob = Instantiate(spaceGiraffePrefab);
-                            mob.transform.SetParent(chunk.transform); // Necessary so mobs are preserved across scene load
-                            mob.transform.position = new Vector3(
-                                mobData.positionX,
-                                mobData.positionY,
-                                mobData.positionZ
-                            );
-                            mob.transform.rotation = Quaternion.Euler(
-                                0,
-                                mobData.rotationY,
-                                0
-                            );
+                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunk.transform);
                         }
                     }
                 }
             }
         }
-
-        // Instantiate blocks
-        // ChunkData[] adjacentChunkData;
-        // foreach (GameObject chunkObj in GameObject.FindGameObjectsWithTag("Chunk"))
-        // {
-        //     if (chunkObj.transform.childCount == 0)
-        //     {
-        //         ChunkData chunkData = chunkObj.GetComponent<ChunkData>();
-        //         if (chunkData.globalPosX >= playerChunkX - renderDistance && chunkData.globalPosX <= playerChunkX + renderDistance && chunkData.globalPosZ >= playerChunkZ - renderDistance && chunkData.globalPosZ <= playerChunkZ + renderDistance)
-        //         {
-        //             adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(chunkData.globalPosX, chunkData.globalPosZ);
-        //             for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
-        //             {
-        //                 for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
-        //                 {
-        //                     for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
-        //                     {
-        //                         BlockID block = chunkData.blocks[localBlockX, localBlockY, localBlockZ];
-        //                         if (block != BlockID.air && ChunkHelpers.BlockShouldBeRendered(block, adjacentChunkData, chunkData, new Vector3(localBlockX, localBlockY, localBlockZ)))
-        //                         {
-        //                             GameObject blockObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        //                             blockObj.hideFlags = HideFlags.HideInHierarchy;
-        //                             blockObj.layer = LayerMask.NameToLayer("Block");
-        //                             blockObj.GetComponent<MeshFilter>().mesh = blockMesh;
-        //                             blockObj.GetComponent<Renderer>().material = blockMaterials[(int)block];
-        //                             blockObj.GetComponent<BoxCollider>().size = new Vector3(0.98F, 0.98F, 0.98F);
-
-        //                             BlockData blockData = blockObj.AddComponent<BlockData>();
-        //                             blockData.blockID = block;
-        //                             blockData.localPosX = localBlockX;
-        //                             blockData.localPosY = localBlockY;
-        //                             blockData.localPosZ = localBlockZ;
-
-        //                             blockObj.transform.position = new Vector3(
-        //                                 (chunkData.globalPosX*GameData.CHUNK_SIZE + localBlockX), localBlockY, (chunkData.globalPosZ*GameData.CHUNK_SIZE + localBlockZ)
-        //                             );
-
-        //                             blockObj.transform.SetParent(chunkObj.transform);
-
-        //                             if (block == BlockID.light)
-        //                             {
-        //                                 Light light = blockObj.AddComponent<Light>();
-        //                                 light.type = LightType.Point;
-        //                             }
-        //                         }
-        //                     }
-        //                 }
-        //                 currentProgressCount++;
-        //                 yield return null;
-        //             }
-        //         }
-        //     }
-        // }
 
         loadingState = LoadingState.DONE_GENERATING;
     }

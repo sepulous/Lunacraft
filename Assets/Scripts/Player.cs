@@ -6,6 +6,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Profiling;
+using UnityEngine.SceneManagement;
 using TMPro;
 
 [Serializable]
@@ -17,10 +18,15 @@ public struct PlayerData
     public float rotationY;
     public float cameraRotationX;
     public InventorySystem inventorySystem;
+    public int health;
+    public int suitStatus;
 }
 
 public class Player : MonoBehaviour
 {
+    private int health = 100;
+    private int suitStatus = 100;
+    private float lastHealthUpdate = 0;
     private GameObject camera;
     private PauseMenu pauseMenu;
     public GameObject rootUIObj;
@@ -28,6 +34,10 @@ public class Player : MonoBehaviour
     private GameObject hotbarUI;
     public GameObject jetpackUI;
     public GameObject crosshairUI;
+
+    public GameObject deathMenu;
+    public Image healthImage;
+    public Image suitStatusImage;
 
     private float flySpeed = 0.8F;
 
@@ -82,6 +92,8 @@ public class Player : MonoBehaviour
     // Sounds
     private AudioSource blockBreakSource;
     public AudioClip blockBreakClip;
+    private AudioSource blockPlaceSource;
+    public AudioClip blockPlaceClip;
     private AudioSource craftSource;
     public AudioClip craftClip;
     private AudioSource scannerSource;
@@ -117,6 +129,9 @@ public class Player : MonoBehaviour
         blockBreakSource = gameObject.AddComponent<AudioSource>();
         blockBreakSource.volume = sfxVolume;
         blockBreakSource.clip = blockBreakClip;
+        blockPlaceSource = gameObject.AddComponent<AudioSource>();
+        blockPlaceSource.volume = sfxVolume;
+        blockPlaceSource.clip = blockPlaceClip;
         craftSource = gameObject.AddComponent<AudioSource>();
         craftSource.volume = sfxVolume;
         craftSource.clip = craftClip;
@@ -177,6 +192,8 @@ public class Player : MonoBehaviour
             playerData.rotationY = 0;
             playerData.cameraRotationX = 0;
             playerData.inventorySystem = new InventorySystem(moonData.isCreative);
+            playerData.health = 100;
+            playerData.suitStatus = 100;
             
             using (FileStream fileStream = new FileStream(playerDataPath, FileMode.Create, FileAccess.Write))
                 (new BinaryFormatter()).Serialize(fileStream, playerData);
@@ -197,6 +214,10 @@ public class Player : MonoBehaviour
         // Inventory/spacesuit
         inventorySystem = playerData.inventorySystem;
         UpdateInventoryUI();
+
+        // Health and suit status
+        health = playerData.health;
+        suitStatus = playerData.suitStatus;
     }
 
     void Start()
@@ -217,483 +238,581 @@ public class Player : MonoBehaviour
 
     void Update()
     {
-        Options currentOptions = OptionsManager.GetCurrentOptions();
-        ItemID selectedItem = inventorySystem.GetSelectedItem();
-
-        // Update SFX volume
-        float sfxVolume = currentOptions.sfxVolume;
-        blockBreakSource.volume = sfxVolume;
-        craftSource.volume = sfxVolume;
-        scannerSource.volume = sfxVolume;
-        drillPowerupSource.volume = sfxVolume;
-        drillingSource.volume = sfxVolume;
-        hurtSource.volume = sfxVolume;
-        pistolSource.volume = sfxVolume;
-        pickupSource.volume = sfxVolume;
-
-        // Hide/show GUI
-        hotbarUI.SetActive(inventoryUI.activeSelf || currentOptions.showGUI);
-        jetpackUI.SetActive(inventoryUI.activeSelf || currentOptions.showGUI);
-        crosshairUI.SetActive(currentOptions.showGUI);
-
-        // Jetpack level
-        jetpackLevelUI.sizeDelta = new Vector2(jetpackLevelUI.sizeDelta.x, jetpackFuel * jetpackLevelUIDefaultHeight);
-
-        // Selection cube
-        bool lookingAtBlock = Physics.Raycast(camera.transform.position, camera.transform.forward, out selectionInfo, maxSelectionDistance, LayerMask.GetMask("Block"));
-        if (lookingAtBlock)
+        if (health == 0)
         {
-            selectionCube.SetActive(true);
-
-            if (selectionCube.transform.position != selectionInfo.collider.gameObject.transform.position)
-            {
-                selectionCube.transform.position = selectionInfo.collider.gameObject.transform.position;
-                blockMineTime = 0;
-                selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
-            }
+            GetComponent<CharacterController>().enabled = false;
+            deathMenu.SetActive(true);
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
         else
         {
-            selectionCube.SetActive(false);
-        }
+            Options currentOptions = OptionsManager.GetCurrentOptions();
+            ItemID selectedItem = inventorySystem.GetSelectedItem();
 
-        // Block placement
-        if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf && selectionCube.activeSelf)
-        {
-            // TODO: Make sure the player is actually holding something placeable
-            placedBlock = Input.GetMouseButtonDown(1);
-            if (placedBlock)
-                handObj.GetComponent<Animator>().SetTrigger("PlacedBlock");
-        }
+            // Update SFX volume
+            float sfxVolume = currentOptions.sfxVolume;
+            blockBreakSource.volume = sfxVolume;
+            craftSource.volume = sfxVolume;
+            scannerSource.volume = sfxVolume;
+            drillPowerupSource.volume = sfxVolume;
+            drillingSource.volume = sfxVolume;
+            hurtSource.volume = sfxVolume;
+            pistolSource.volume = sfxVolume;
+            pickupSource.volume = sfxVolume;
 
-        // Item pickup
-        Collider[] droppedItems = Physics.OverlapSphere(camera.transform.position, 3F, LayerMask.GetMask("Dropped"));
-        foreach (Collider dropped in droppedItems)
-        {
-            GameObject droppedObj = dropped.gameObject;
-            Vector3 displacement = camera.transform.position - droppedObj.transform.position;
-            Dropped droppedScript = droppedObj.GetComponent<Dropped>();
-            if (!droppedScript.thrown || droppedScript.readyForPickup)
+            // Hide/show GUI
+            hotbarUI.SetActive(inventoryUI.activeSelf || currentOptions.showGUI);
+            jetpackUI.SetActive(inventoryUI.activeSelf || currentOptions.showGUI);
+            crosshairUI.SetActive(currentOptions.showGUI);
+
+            // Jetpack level
+            jetpackLevelUI.sizeDelta = new Vector2(jetpackLevelUI.sizeDelta.x, jetpackFuel * jetpackLevelUIDefaultHeight);
+
+            // Replenish suit status/health
+            ItemID batteryItem = inventorySystem.spacesuit.batterySlot.itemID;
+            if (Time.time - lastHealthUpdate > 0.8F)
             {
-                if (displacement.magnitude < 1F) // Pick item up
+                if (suitStatus < 100 && (batteryItem == ItemID.battery || batteryItem == ItemID.power_crystal || batteryItem == ItemID.energy_orb))
                 {
-                    ItemID droppedItemID = droppedScript.itemID;
-                    if (droppedItemID == ItemID.topsoil)
-                        droppedItemID = ItemID.dirt;
-                    AddToInventory(droppedItemID, droppedScript.amount);
-                    Destroy(droppedObj);
-                    pickupSource.Play();
-                }
-                else // Move item toward player
-                {
-                    droppedScript.movingTowardPlayer = true;
-                    droppedObj.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezeRotation;
-                    droppedObj.GetComponent<BoxCollider>().isTrigger = true;
-                    droppedObj.GetComponent<Rigidbody>().linearVelocity = 6F * displacement.normalized;
-                }
-            }
-        }
-
-        //
-        // Hand animations + mining logic
-        //
-        if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf)
-        {
-            if (Input.GetMouseButton(0))
-            {
-                if (selectedItem.ToString().StartsWith("drill")) // Drilling
-                {
-                    if (!drillPowerupSource.isPlaying && !drillingSource.isPlaying)
-                    {
-                        drillPowerupSource.Play();
-                        drillingSource.PlayScheduled(AudioSettings.dspTime + drillPowerupSource.clip.length);
-                    }
-                    handAnimator.SetBool("IsDrilling", true); // Extension
-                    handParentAnimator.SetBool("IsDrilling", true); // Shaking
-                    drillObj.transform.Find("Drill Bit").GetComponent<Animator>().SetBool("IsDrilling", true);
-
-                    if (selectionCube.activeSelf)
-                    {
-                        blockMineTime += Time.deltaTime; // BUG: This *may* be framerate dependent. Make sure it isn't.
-                        float totalMineTime;
-                        if (selectedItem.ToString() == "drill_t1")
-                            totalMineTime = 2;
-                        else if (selectedItem.ToString() == "drill_t2")
-                            totalMineTime = 1;
-                        else
-                            totalMineTime = 0.5F;
-
-                        int blockMineLevel = (int)((5 * blockMineTime) / totalMineTime);
-                        if (blockMineLevel == 5)
-                        {
-                            selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
-                            blockMineTime = 0;
-                            destroyedBlock = true;
-                            blockBreakSource.Play();
-                        }
-                        else
-                        {
-                            selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[blockMineLevel];
-                        }
-                    }
+                    if (batteryItem == ItemID.battery)
+                        suitStatus++;
+                    else if (batteryItem == ItemID.power_crystal)
+                        suitStatus = Mathf.Min(100, suitStatus + 2);
                     else
-                    {
-                        selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
-                        blockMineTime = 0;
-                        destroyedBlock = false;
-                    }
+                        suitStatus = Mathf.Min(100, suitStatus + 3);
                 }
-                else if (selectedItem.ToString().StartsWith("slug")) // Charge pistol
+                if (suitStatus > 0 && health < 100)
                 {
-                    pistolAnimator.SetBool("IsCharging", true);
-                    pistolSlideAnimator.SetBool("IsCharging", true);
-                    pistolChargeTime += Time.deltaTime;
+                    health++;
                 }
-                else // Punching
-                {
-                    handAnimator.SetBool("IsPunching", true);
-                }
+                lastHealthUpdate = Time.time;
             }
-            else if (Input.GetMouseButtonUp(0))
-            {
-                CancelAllAnimations();
 
-                if (selectedItem.ToString().StartsWith("drill"))
+            // Selection cube
+            bool lookingAtBlock = Physics.Raycast(camera.transform.position, camera.transform.forward, out selectionInfo, maxSelectionDistance, LayerMask.GetMask("Block"));
+            if (lookingAtBlock)
+            {
+                selectionCube.SetActive(true);
+
+                if (selectionCube.transform.position != selectionInfo.collider.gameObject.transform.position)
                 {
-                    selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
+                    selectionCube.transform.position = selectionInfo.collider.gameObject.transform.position;
                     blockMineTime = 0;
-                    drillPowerupSource.Stop();
-                    drillingSource.Stop();
+                    selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
                 }
-                else if (selectedItem.ToString().StartsWith("slug")) // Shoot pistol
-                {
-                    // Instantiate prefab with appropriate velocity
-                    GameObject slug = Instantiate(slugPrefab, pistolObj.transform.position, camera.transform.rotation);
-                    Slug slugComponent = slug.GetComponent<Slug>();
-                    slugComponent.initialPosition = pistolObj.transform.position;
-                    int pistolLevel = selectedItem.ToString()[^1] - '0';
-                    float chargeAmount = pistolLevel * Mathf.Clamp(pistolChargeTime, 0, 5); // 5 seconds is maximum charge
-                    slugComponent.initialVelocity = (15*chargeAmount + 2) * (camera.transform.forward - 0.02F*camera.transform.right);
-                    slugComponent.initialAngleInDegrees = camera.transform.eulerAngles.x;
-                    pistolChargeTime = 0;
-                    pistolSource.Play();
-                }
-            }
-        }
-        else
-        {
-            CancelAllAnimations();
-        }
-
-        // Toggle inventory
-        if (Input.GetKeyDown(KeyCode.E) && !pauseMenu.IsPaused())
-        {
-            if (inventoryUI.activeSelf)
-            {
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
             }
             else
             {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
+                selectionCube.SetActive(false);
             }
 
-            inventoryUI.SetActive(!inventoryUI.activeSelf);
-        }
-
-        InventorySlot oldSelectedSlot = inventorySystem.inventory.slots[0][inventorySystem.selectedHotbarSlot - 1];
-
-        if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf)
-        {
-            // Change hotbar selection (number key)
-            for (int i = 0; i <= 9; i++)
+            // Block placement
+            if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf && selectionCube.activeSelf)
             {
-                if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + i)))
+                ItemID selected = inventorySystem.inventory.slots[0][inventorySystem.selectedHotbarSlot - 1].itemID;
+                placedBlock = Input.GetMouseButtonDown(1) && Enum.TryParse(selected.ToString(), out BlockID _);
+                if (placedBlock)
                 {
-                    if (i == 0)
-                        inventorySystem.selectedHotbarSlot = 10;
-                    else
-                        inventorySystem.selectedHotbarSlot = i;
+                    handObj.GetComponent<Animator>().SetTrigger("PlacedBlock");
+                    blockPlaceSource.Play();
+                }
+            }
 
+            // Item pickup
+            Collider[] droppedItems = Physics.OverlapSphere(camera.transform.position, 3F, LayerMask.GetMask("Dropped"));
+            foreach (Collider dropped in droppedItems)
+            {
+                GameObject droppedObj = dropped.gameObject;
+                Vector3 displacement = camera.transform.position - droppedObj.transform.position;
+                Dropped droppedScript = droppedObj.GetComponent<Dropped>();
+                if (!droppedScript.thrown || droppedScript.readyForPickup)
+                {
+                    if (displacement.magnitude < 1F) // Pick item up
+                    {
+                        ItemID droppedItemID = droppedScript.itemID;
+                        if (droppedItemID == ItemID.topsoil)
+                            droppedItemID = ItemID.dirt;
+                        AddToInventory(droppedItemID, droppedScript.amount);
+                        Destroy(droppedObj);
+                        pickupSource.Play();
+                    }
+                    else // Move item toward player
+                    {
+                        droppedScript.movingTowardPlayer = true;
+                        droppedObj.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezeRotation;
+                        droppedObj.GetComponent<BoxCollider>().isTrigger = true;
+                        droppedObj.GetComponent<Rigidbody>().linearVelocity = 6F * displacement.normalized;
+                    }
+                }
+            }
+
+            // if (Input.GetKeyDown(KeyCode.Y))
+            // {
+            //     Debug.Log($"{inventorySystem.assembler.inputSlots[2][0].itemID.ToString()}, {inventorySystem.assembler.inputSlots[2][1].itemID.ToString()}, {inventorySystem.assembler.inputSlots[2][2].itemID.ToString()}");
+            //     Debug.Log($"{inventorySystem.assembler.inputSlots[1][0].itemID.ToString()}, {inventorySystem.assembler.inputSlots[1][1].itemID.ToString()}, {inventorySystem.assembler.inputSlots[1][2].itemID.ToString()}");
+            //     Debug.Log($"{inventorySystem.assembler.inputSlots[0][0].itemID.ToString()}, {inventorySystem.assembler.inputSlots[0][1].itemID.ToString()}, {inventorySystem.assembler.inputSlots[0][2].itemID.ToString()}");
+            // }
+
+            //
+            // Hand animations + mining logic
+            //
+            if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf)
+            {
+                if (Input.GetMouseButton(0))
+                {
+                    if (selectedItem.ToString().StartsWith("drill")) // Drilling
+                    {
+                        if (!drillPowerupSource.isPlaying && !drillingSource.isPlaying)
+                        {
+                            drillPowerupSource.Play();
+                            drillingSource.PlayScheduled(AudioSettings.dspTime + drillPowerupSource.clip.length);
+                        }
+                        handAnimator.SetBool("IsDrilling", true); // Extension
+                        handParentAnimator.SetBool("IsDrilling", true); // Shaking
+                        drillObj.transform.Find("Drill Bit").GetComponent<Animator>().SetBool("IsDrilling", true);
+
+                        if (selectionCube.activeSelf)
+                        {
+                            blockMineTime += Time.deltaTime; // BUG: This *may* be framerate dependent. Make sure it isn't.
+                            float totalMineTime;
+                            if (selectedItem.ToString() == "drill_t1")
+                                totalMineTime = 2;
+                            else if (selectedItem.ToString() == "drill_t2")
+                                totalMineTime = 1;
+                            else
+                                totalMineTime = 0.5F;
+
+                            int blockMineLevel = (int)((5 * blockMineTime) / totalMineTime);
+                            if (blockMineLevel == 5)
+                            {
+                                selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
+                                blockMineTime = 0;
+                                destroyedBlock = true;
+                                blockBreakSource.Play();
+                            }
+                            else
+                            {
+                                selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[blockMineLevel];
+                            }
+                        }
+                        else
+                        {
+                            selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
+                            blockMineTime = 0;
+                            destroyedBlock = false;
+                        }
+                    }
+                    else if (selectedItem.ToString().StartsWith("slug")) // Charge pistol
+                    {
+                        pistolAnimator.SetBool("IsCharging", true);
+                        pistolSlideAnimator.SetBool("IsCharging", true);
+                        pistolChargeTime += Time.deltaTime;
+                    }
+                    else // Punching
+                    {
+                        handAnimator.SetBool("IsPunching", true);
+                    }
+                }
+                else if (Input.GetMouseButtonUp(0))
+                {
                     CancelAllAnimations();
-                    drillPowerupSource.Stop();
-                    drillingSource.Stop();
 
-                    break;
+                    if (selectedItem.ToString().StartsWith("drill"))
+                    {
+                        selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
+                        blockMineTime = 0;
+                        drillPowerupSource.Stop();
+                        drillingSource.Stop();
+                    }
+                    else if (selectedItem.ToString().StartsWith("slug")) // Shoot pistol
+                    {
+                        // Instantiate prefab with appropriate velocity
+                        GameObject slug = Instantiate(slugPrefab, pistolObj.transform.position, camera.transform.rotation);
+                        Slug slugComponent = slug.GetComponent<Slug>();
+                        slugComponent.initialPosition = pistolObj.transform.position;
+                        int pistolLevel = selectedItem.ToString()[^1] - '0';
+                        float chargeAmount = pistolLevel * Mathf.Clamp(pistolChargeTime, 0, 5); // 5 seconds is maximum charge
+                        slugComponent.initialVelocity = (15*chargeAmount + 2) * (camera.transform.forward - 0.02F*camera.transform.right);
+                        slugComponent.initialAngleInDegrees = camera.transform.eulerAngles.x;
+                        pistolChargeTime = 0;
+                        pistolSource.Play();
+                    }
                 }
             }
-
-            // Change hotbar selection (scroll)
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (scroll != 0)
+            else
             {
-                if (scroll < 0f)
-                {
-                    if (inventorySystem.selectedHotbarSlot == 10)
-                        inventorySystem.selectedHotbarSlot = 1;
-                    else
-                        inventorySystem.selectedHotbarSlot++;
-                }
-                else if (scroll > 0f)
-                {
-                    if (inventorySystem.selectedHotbarSlot == 1)
-                        inventorySystem.selectedHotbarSlot = 10;
-                    else
-                        inventorySystem.selectedHotbarSlot--;
-                }
                 CancelAllAnimations();
-                drillPowerupSource.Stop();
-                drillingSource.Stop();
             }
-        }
 
-        InventorySlot selectedSlot = inventorySystem.inventory.slots[0][inventorySystem.selectedHotbarSlot - 1];
-
-        // Chronobooster/chronowinder
-        if (oldSelectedSlot.itemID != ItemID.chronobooster && selectedSlot.itemID == ItemID.chronobooster)
-            GameObject.Find("WorldClock").GetComponent<WorldClock>().Speedup();
-        else if (oldSelectedSlot.itemID == ItemID.chronobooster && selectedSlot.itemID != ItemID.chronobooster)
-            GameObject.Find("WorldClock").GetComponent<WorldClock>().Slowdown();
-
-        if (oldSelectedSlot.itemID != ItemID.chronowinder && selectedSlot.itemID == ItemID.chronowinder)
-            GameObject.Find("WorldClock").GetComponent<WorldClock>().Reverse();
-        else if (oldSelectedSlot.itemID == ItemID.chronowinder && selectedSlot.itemID != ItemID.chronowinder)
-            GameObject.Find("WorldClock").GetComponent<WorldClock>().Unreverse();
-
-        // Update held item
-        if (selectedSlot.itemID.ToString().StartsWith("drill"))
-        {
-            drillObj.SetActive(true);
-            heldBlockObj.SetActive(false);
-            heldSpriteObj.SetActive(false);
-            pistolObj.SetActive(false);
-        }
-        else if (selectedSlot.itemID.ToString().StartsWith("slug"))
-        {
-            pistolObj.SetActive(true);
-            drillObj.SetActive(false);
-            heldBlockObj.SetActive(false);
-            heldSpriteObj.SetActive(false);
-        }
-        else
-        {
-            drillObj.SetActive(false);
-            pistolObj.SetActive(false);
-
-            if (Enum.TryParse(selectedSlot.itemID.ToString(), out BlockID selectedBlockID)) // Holding a block
+            // Toggle inventory
+            if (Input.GetKeyDown(KeyCode.E) && !pauseMenu.IsPaused())
             {
-                heldBlockObj.GetComponent<Renderer>().material = blockMaterials[(int)selectedBlockID];
-                heldBlockObj.SetActive(true);
-                heldSpriteObj.SetActive(false);
-            }
-            else // Holding a non-block item
-            {
-                heldBlockObj.SetActive(false);
-                if (selectedSlot.itemID != ItemID.none)
+                if (inventoryUI.activeSelf)
                 {
-                    heldSpriteObj.SetActive(true);
-                    //heldSpriteObj.GetComponent<Renderer>().material.SetTexture("_BaseMap", Resources.Load<Texture2D>($"Textures/Items/{selectedSlot.itemID.ToString()}_item"));
-                    heldSpriteObj.GetComponent<Renderer>().material.SetTexture("_BaseMap", MeshData.GetItemSprite(selectedSlot.itemID).texture);
+                    Cursor.lockState = CursorLockMode.Locked;
+                    Cursor.visible = false;
                 }
                 else
                 {
-                    heldSpriteObj.SetActive(false);
+                    Cursor.lockState = CursorLockMode.None;
+                    Cursor.visible = true;
+                }
+
+                inventoryUI.SetActive(!inventoryUI.activeSelf);
+            }
+
+            InventorySlot oldSelectedSlot = inventorySystem.inventory.slots[0][inventorySystem.selectedHotbarSlot - 1];
+
+            if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf)
+            {
+                // Change hotbar selection (number key)
+                for (int i = 0; i <= 9; i++)
+                {
+                    if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + i)))
+                    {
+                        if (i == 0)
+                            inventorySystem.selectedHotbarSlot = 10;
+                        else
+                            inventorySystem.selectedHotbarSlot = i;
+
+                        CancelAllAnimations();
+                        drillPowerupSource.Stop();
+                        drillingSource.Stop();
+
+                        break;
+                    }
+                }
+
+                // Change hotbar selection (scroll)
+                float scroll = Input.GetAxis("Mouse ScrollWheel");
+                if (scroll != 0)
+                {
+                    if (scroll < 0f)
+                    {
+                        if (inventorySystem.selectedHotbarSlot == 10)
+                            inventorySystem.selectedHotbarSlot = 1;
+                        else
+                            inventorySystem.selectedHotbarSlot++;
+                    }
+                    else if (scroll > 0f)
+                    {
+                        if (inventorySystem.selectedHotbarSlot == 1)
+                            inventorySystem.selectedHotbarSlot = 10;
+                        else
+                            inventorySystem.selectedHotbarSlot--;
+                    }
+                    CancelAllAnimations();
+                    drillPowerupSource.Stop();
+                    drillingSource.Stop();
                 }
             }
-        }
 
-        /*
+            InventorySlot selectedSlot = inventorySystem.inventory.slots[0][inventorySystem.selectedHotbarSlot - 1];
 
-            k = i*10 + (j+1)
+            // Chronobooster/chronowinder
+            if (oldSelectedSlot.itemID != ItemID.chronobooster && selectedSlot.itemID == ItemID.chronobooster)
+                GameObject.Find("WorldClock").GetComponent<WorldClock>().Speedup();
+            else if (oldSelectedSlot.itemID == ItemID.chronobooster && selectedSlot.itemID != ItemID.chronobooster)
+                GameObject.Find("WorldClock").GetComponent<WorldClock>().Slowdown();
 
-            i = floor(k / 10)
-            j = (k % 10) - 1
+            if (oldSelectedSlot.itemID != ItemID.chronowinder && selectedSlot.itemID == ItemID.chronowinder)
+                GameObject.Find("WorldClock").GetComponent<WorldClock>().Reverse();
+            else if (oldSelectedSlot.itemID == ItemID.chronowinder && selectedSlot.itemID != ItemID.chronowinder)
+                GameObject.Find("WorldClock").GetComponent<WorldClock>().Unreverse();
 
-        */
-
-        // Throw item out (with 'q')
-        if (Input.GetKeyDown(KeyCode.Q) && !inventoryUI.activeSelf && !pauseMenu.IsPaused())
-        {
-            ThrowStack(selectedSlot.itemID, 1);
-            selectedSlot.amount--;
-            if (selectedSlot.amount == 0)
-                selectedSlot.itemID = ItemID.none;
-        }
-
-        // Moving items around inventory
-        if (inventoryUI.activeSelf)
-        {
-            heldStack.transform.position = Input.mousePosition;
-
-            bool leftClick = Input.GetMouseButtonDown(0);
-            bool rightClick = Input.GetMouseButtonDown(1);
-            if (leftClick || rightClick)
+            // Update held item
+            if (selectedSlot.itemID.ToString().StartsWith("drill"))
             {
-                InventorySlot hoveredSlot = null;
-                bool hoveringOnAssemblerOutput = false;
-                bool holdingStack = heldItemAmount > 0 && heldItemID != ItemID.none;
-                float mousePosRatioX = Input.mousePosition.x / 2560F;
-                float mousePosRatioY = Input.mousePosition.y / 1440F;
+                drillObj.SetActive(true);
+                heldBlockObj.SetActive(false);
+                heldSpriteObj.SetActive(false);
+                pistolObj.SetActive(false);
+            }
+            else if (selectedSlot.itemID.ToString().StartsWith("slug"))
+            {
+                pistolObj.SetActive(true);
+                drillObj.SetActive(false);
+                heldBlockObj.SetActive(false);
+                heldSpriteObj.SetActive(false);
+            }
+            else
+            {
+                drillObj.SetActive(false);
+                pistolObj.SetActive(false);
 
-                // Check inventory slots
-                for (int i = 0; i < 5; i++)
+                if (Enum.TryParse(selectedSlot.itemID.ToString(), out BlockID selectedBlockID)) // Holding a block
                 {
-                    for (int j = 0; j < 10; j++)
+                    heldBlockObj.GetComponent<Renderer>().material = blockMaterials[(int)selectedBlockID];
+                    heldBlockObj.SetActive(true);
+                    heldSpriteObj.SetActive(false);
+                }
+                else // Holding a non-block item
+                {
+                    heldBlockObj.SetActive(false);
+                    if (selectedSlot.itemID != ItemID.none)
                     {
-                        float xLeft = (634F / 2560F) + j*(135F / 2560F);
-                        float xRight = xLeft + (118F / 2560F);
-                        float yBottom = (74F / 1440F) + i*(135F / 1440F);
-                        float yTop = yBottom + (118F / 1440F);
-                        if (mousePosRatioX > xLeft && mousePosRatioX < xRight && mousePosRatioY > yBottom && mousePosRatioY < yTop)
-                        {
-                            hoveredSlot = inventorySystem.inventory.slots[i][j];
-                            goto HoveredSlotFound;
-                        }
+                        heldSpriteObj.SetActive(true);
+                        //heldSpriteObj.GetComponent<Renderer>().material.SetTexture("_BaseMap", Resources.Load<Texture2D>($"Textures/Items/{selectedSlot.itemID.ToString()}_item"));
+                        heldSpriteObj.GetComponent<Renderer>().material.SetTexture("_BaseMap", MeshData.GetItemSprite(selectedSlot.itemID).texture);
+                    }
+                    else
+                    {
+                        heldSpriteObj.SetActive(false);
                     }
                 }
+            }
 
-                // Check assembler slots
-                for (int i = 0; i < 3; i++)
+            /*
+
+                k = i*10 + (j+1)
+
+                i = floor(k / 10)
+                j = (k % 10) - 1
+
+            */
+
+            // Throw item out (with 'q')
+            if (Input.GetKeyDown(KeyCode.Q) && !inventoryUI.activeSelf && !pauseMenu.IsPaused())
+            {
+                ThrowStack(selectedSlot.itemID, 1);
+                selectedSlot.amount--;
+                if (selectedSlot.amount == 0)
+                    selectedSlot.itemID = ItemID.none;
+            }
+
+            // Moving items around inventory
+            if (inventoryUI.activeSelf)
+            {
+                heldStack.transform.position = Input.mousePosition;
+
+                bool leftClick = Input.GetMouseButtonDown(0);
+                bool rightClick = Input.GetMouseButtonDown(1);
+                if (leftClick || rightClick)
                 {
-                    for (int j = 0; j < 3; j++)
+                    InventorySlot hoveredSlot = null;
+                    bool hoveringOnAssemblerOutput = false;
+                    bool holdingStack = heldItemAmount > 0 && heldItemID != ItemID.none;
+                    float mousePosRatioX = Input.mousePosition.x / 2560F;
+                    float mousePosRatioY = Input.mousePosition.y / 1440F;
+
+                    // Check inventory slots
+                    for (int i = 0; i < 5; i++)
                     {
-                        float xLeft = (1496F / 2560F) + j*(120F / 2560F);
-                        float xRight = xLeft + (104F / 2560F);
-                        float yBottom = (908F / 1440F) + i*(120F / 1440F);
-                        float yTop = yBottom + (104F / 1440F);
-                        if (mousePosRatioX > xLeft && mousePosRatioX < xRight && mousePosRatioY > yBottom && mousePosRatioY < yTop)
+                        for (int j = 0; j < 10; j++)
                         {
-                            hoveredSlot = inventorySystem.assembler.inputSlots[i][j];
-                            goto HoveredSlotFound;
-                        }
-                    }
-                }
-                if (mousePosRatioX > (1958F / 2560F) && mousePosRatioX < (2058F / 2560F) && mousePosRatioY > (908F / 1440F) && mousePosRatioY < (1012F / 1440F))
-                {
-                    hoveringOnAssemblerOutput = true;
-                    goto HoveredSlotFound;
-                }
-
-                // Check scanner slot
-                if (mousePosRatioX >= (484F / 2560F) && mousePosRatioX <= (588F / 2560F) && mousePosRatioY >= (1149F / 1440F) && mousePosRatioY <= (1250F / 1440F))
-                {
-                    hoveredSlot = inventorySystem.scannerSlot;
-                    goto HoveredSlotFound;
-                }
-
-                // Check spacesuit slots
-                if (mousePosRatioX >= (1228F / 2560F) && mousePosRatioX <= (1325F / 2560F))
-                {
-                    if (mousePosRatioY >= (867F / 1440F) && mousePosRatioY <= (974F / 1440F))
-                        hoveredSlot = inventorySystem.spacesuit.jetpackSlot;
-                    else if (mousePosRatioY >= (1056F / 1440F) && mousePosRatioY <= (1154F / 1440F))
-                        hoveredSlot = inventorySystem.spacesuit.batterySlot;
-                    else if (mousePosRatioY >= (1209F / 1440F) && mousePosRatioY <= (1308F / 1440F))
-                        hoveredSlot = inventorySystem.spacesuit.helmetSlot;
-                }
-
-                // Throwing item out
-                if (holdingStack && (mousePosRatioX <= (600F / 2560F) || mousePosRatioX >= (1980F / 2560F)) && mousePosRatioY <= (880F / 1440F))
-                {
-                    ThrowStack(heldItemID, heldItemAmount);
-                    heldItemID = ItemID.none;
-                    heldItemAmount = 0;
-                }
-
-            HoveredSlotFound:
-                if (hoveredSlot != null || hoveringOnAssemblerOutput) // Player is hovering over inventory slot
-                {
-                    if (hoveringOnAssemblerOutput)
-                    {
-                        List<(ItemID, int)> recipeMatch = inventorySystem.assembler.FindRecipeMatch();
-                        if (recipeMatch != null) // Can take from output slot
-                        {
-                            // Use input items
-                            for (int i = 0; i < 3; i++)
+                            float xLeft = (634F / 2560F) + j*(135F / 2560F);
+                            float xRight = xLeft + (118F / 2560F);
+                            float yBottom = (74F / 1440F) + i*(135F / 1440F);
+                            float yTop = yBottom + (118F / 1440F);
+                            if (mousePosRatioX > xLeft && mousePosRatioX < xRight && mousePosRatioY > yBottom && mousePosRatioY < yTop)
                             {
-                                for (int j = 0; j < 3; j++)
+                                hoveredSlot = inventorySystem.inventory.slots[i][j];
+                                goto HoveredSlotFound;
+                            }
+                        }
+                    }
+
+                    // Check assembler slots
+                    for (int i = 0; i < 3; i++)
+                    {
+                        for (int j = 0; j < 3; j++)
+                        {
+                            float xLeft = (1496F / 2560F) + j*(120F / 2560F);
+                            float xRight = xLeft + (104F / 2560F);
+                            float yBottom = (908F / 1440F) + i*(120F / 1440F);
+                            float yTop = yBottom + (104F / 1440F);
+                            if (mousePosRatioX > xLeft && mousePosRatioX < xRight && mousePosRatioY > yBottom && mousePosRatioY < yTop)
+                            {
+                                hoveredSlot = inventorySystem.assembler.inputSlots[i][j];
+                                goto HoveredSlotFound;
+                            }
+                        }
+                    }
+                    if (mousePosRatioX > (1958F / 2560F) && mousePosRatioX < (2058F / 2560F) && mousePosRatioY > (908F / 1440F) && mousePosRatioY < (1012F / 1440F))
+                    {
+                        hoveringOnAssemblerOutput = true;
+                        goto HoveredSlotFound;
+                    }
+
+                    // Check scanner slot
+                    if (mousePosRatioX >= (484F / 2560F) && mousePosRatioX <= (588F / 2560F) && mousePosRatioY >= (1149F / 1440F) && mousePosRatioY <= (1250F / 1440F))
+                    {
+                        hoveredSlot = inventorySystem.scannerSlot;
+                        goto HoveredSlotFound;
+                    }
+
+                    // Check spacesuit slots
+                    if (mousePosRatioX >= (1228F / 2560F) && mousePosRatioX <= (1325F / 2560F))
+                    {
+                        if (mousePosRatioY >= (867F / 1440F) && mousePosRatioY <= (974F / 1440F))
+                            hoveredSlot = inventorySystem.spacesuit.jetpackSlot;
+                        else if (mousePosRatioY >= (1056F / 1440F) && mousePosRatioY <= (1154F / 1440F))
+                            hoveredSlot = inventorySystem.spacesuit.batterySlot;
+                        else if (mousePosRatioY >= (1209F / 1440F) && mousePosRatioY <= (1308F / 1440F))
+                            hoveredSlot = inventorySystem.spacesuit.helmetSlot;
+                    }
+
+                    // Throwing item out
+                    if (holdingStack && (mousePosRatioX <= (600F / 2560F) || mousePosRatioX >= (1980F / 2560F)) && mousePosRatioY <= (880F / 1440F))
+                    {
+                        ThrowStack(heldItemID, heldItemAmount);
+                        heldItemID = ItemID.none;
+                        heldItemAmount = 0;
+                    }
+
+                HoveredSlotFound:
+                    if (hoveredSlot != null || hoveringOnAssemblerOutput) // Player is hovering over inventory slot
+                    {
+                        if (hoveringOnAssemblerOutput)
+                        {
+                            List<(ItemID, int)> recipeMatch = inventorySystem.assembler.FindRecipeMatch();
+                            if (recipeMatch != null) // Can take from output slot
+                            {
+                                // Use input items
+                                for (int i = 0; i < 3; i++)
                                 {
-                                    InventorySlot inputSlot = inventorySystem.assembler.inputSlots[i][j];
-                                    if (inputSlot.itemID != ItemID.none)
+                                    for (int j = 0; j < 3; j++)
                                     {
-                                        foreach (var recipeItem in recipeMatch)
+                                        InventorySlot inputSlot = inventorySystem.assembler.inputSlots[i][j];
+                                        if (inputSlot.itemID != ItemID.none)
                                         {
-                                            if (recipeItem.Item1 == inputSlot.itemID)
+                                            foreach (var recipeItem in recipeMatch)
                                             {
-                                                inputSlot.amount -= recipeItem.Item2;
-                                                break;
+                                                if (recipeItem.Item1 == inputSlot.itemID)
+                                                {
+                                                    inputSlot.amount -= recipeItem.Item2;
+                                                    break;
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            if (Input.GetKey(KeyCode.LeftShift))
-                            {
-                                AddToInventory(recipeMatch[0].Item1, recipeMatch[0].Item2);
-                            }
-                            else if (!holdingStack) // Put output in hand
-                            {
-                                heldItemID = recipeMatch[0].Item1;
-                                heldItemAmount = recipeMatch[0].Item2;
-                            }
-                            craftSource.Play();
-                        }
-                    }
-                    else
-                    {
-                        bool hoveredSlotHasStack = hoveredSlot.itemID != ItemID.none;
-                        bool sameItemID = heldItemID == hoveredSlot.itemID;
-                        
-                        if (leftClick)
-                        {
-                            if (!holdingStack) // Not holding anything
-                            {
-                                if (hoveredSlotHasStack) // Pick up stack
+                                if (Input.GetKey(KeyCode.LeftShift))
                                 {
-                                    if (Input.GetKey(KeyCode.LeftShift))
+                                    AddToInventory(recipeMatch[0].Item1, recipeMatch[0].Item2);
+                                }
+                                else if (!holdingStack) // Put output in hand
+                                {
+                                    heldItemID = recipeMatch[0].Item1;
+                                    heldItemAmount = recipeMatch[0].Item2;
+                                }
+                                craftSource.Play();
+                            }
+                        }
+                        else
+                        {
+                            bool hoveredSlotHasStack = hoveredSlot.itemID != ItemID.none;
+                            bool sameItemID = heldItemID == hoveredSlot.itemID;
+                            
+                            if (leftClick)
+                            {
+                                if (!holdingStack) // Not holding anything
+                                {
+                                    if (hoveredSlotHasStack) // Pick up stack
                                     {
-                                        ItemID hoveredItemID = hoveredSlot.itemID;
-                                        int hoveredItemAmount = hoveredSlot.amount;
-                                        hoveredSlot.itemID = ItemID.none;
-                                        hoveredSlot.amount = 0;
-                                        AddToInventory(hoveredItemID, hoveredItemAmount);
+                                        if (Input.GetKey(KeyCode.LeftShift))
+                                        {
+                                            ItemID hoveredItemID = hoveredSlot.itemID;
+                                            int hoveredItemAmount = hoveredSlot.amount;
+                                            hoveredSlot.itemID = ItemID.none;
+                                            hoveredSlot.amount = 0;
+                                            AddToInventory(hoveredItemID, hoveredItemAmount);
+                                        }
+                                        else
+                                        {
+                                            heldItemID = hoveredSlot.itemID;
+                                            heldItemAmount = hoveredSlot.amount;
+                                            hoveredSlot.itemID = ItemID.none;
+                                            hoveredSlot.amount = 0;
+                                        }
                                     }
-                                    else
+                                }
+                                else // Holding a stack
+                                {
+                                    if (hoveredSlotHasStack) // Slot has a stack
                                     {
-                                        heldItemID = hoveredSlot.itemID;
-                                        heldItemAmount = hoveredSlot.amount;
-                                        hoveredSlot.itemID = ItemID.none;
-                                        hoveredSlot.amount = 0;
+                                        if (Input.GetKey(KeyCode.LeftShift))
+                                        {
+                                            ItemID hoveredItemID = hoveredSlot.itemID;
+                                            int hoveredItemAmount = hoveredSlot.amount;
+                                            hoveredSlot.itemID = ItemID.none;
+                                            hoveredSlot.amount = 0;
+                                            AddToInventory(hoveredItemID, hoveredItemAmount);
+                                        }
+                                        else
+                                        {
+                                            if (sameItemID) // Add as many to slot stack as possible
+                                            {
+                                                int amountToAdd = Mathf.Clamp(heldItemAmount, 0, 999 - hoveredSlot.amount);
+                                                hoveredSlot.amount += amountToAdd;
+                                                heldItemAmount -= amountToAdd;
+                                            }
+                                            else // Swap slot stack with held stack
+                                            {
+                                                ItemID hoveredItemID = hoveredSlot.itemID;
+                                                int hoveredItemAmount = hoveredSlot.amount;
+
+                                                hoveredSlot.itemID = heldItemID;
+                                                hoveredSlot.amount = heldItemAmount;
+                                                heldItemID = hoveredItemID;
+                                                heldItemAmount = hoveredItemAmount;
+                                                //(hoveredSlot.itemID, hoveredSlot.amount) = (heldItemID, heldItemAmount);
+
+                                                if (hoveredSlot == inventorySystem.scannerSlot)
+                                                    scannerSource.Play();
+                                            }
+                                        }
+                                    }
+                                    else // Place stack in empty slot
+                                    {
+                                        hoveredSlot.itemID = heldItemID;
+                                        hoveredSlot.amount = heldItemAmount;
+                                        heldItemID = ItemID.none;
+                                        heldItemAmount = 0;
+
+                                        if (hoveredSlot == inventorySystem.scannerSlot)
+                                            scannerSource.Play();
                                     }
                                 }
                             }
-                            else // Holding a stack
+                            else if (rightClick)
                             {
-                                if (hoveredSlotHasStack) // Slot has a stack
+                                if (!holdingStack) // Not holding anything
                                 {
-                                    if (Input.GetKey(KeyCode.LeftShift))
+                                    if (hoveredSlotHasStack) // Pick up half of stack
                                     {
-                                        ItemID hoveredItemID = hoveredSlot.itemID;
-                                        int hoveredItemAmount = hoveredSlot.amount;
-                                        hoveredSlot.itemID = ItemID.none;
-                                        hoveredSlot.amount = 0;
-                                        AddToInventory(hoveredItemID, hoveredItemAmount);
-                                    }
-                                    else
-                                    {
-                                        if (sameItemID) // Add as many to slot stack as possible
+                                        if (hoveredSlot.amount == 1)
                                         {
-                                            int amountToAdd = Mathf.Clamp(heldItemAmount, 0, 999 - hoveredSlot.amount);
-                                            hoveredSlot.amount += amountToAdd;
-                                            heldItemAmount -= amountToAdd;
+                                            heldItemID = hoveredSlot.itemID;
+                                            heldItemAmount = 1;
+                                            hoveredSlot.itemID = ItemID.none;
+                                            hoveredSlot.amount = 0;
+                                        }
+                                        else
+                                        {
+                                            int amountToTake = Mathf.FloorToInt(hoveredSlot.amount / 2);
+                                            hoveredSlot.amount -= amountToTake;
+                                            heldItemID = hoveredSlot.itemID;
+                                            heldItemAmount = amountToTake;
+                                        }
+                                    }
+                                }
+                                else // Holding a stack
+                                {
+                                    if (hoveredSlotHasStack)
+                                    {
+                                        if (sameItemID && hoveredSlot.amount < 999) // Add one to slot stack (if possible)
+                                        {
+                                            hoveredSlot.amount++;
+                                            heldItemAmount--;
                                         }
                                         else // Swap slot stack with held stack
                                         {
                                             ItemID hoveredItemID = hoveredSlot.itemID;
                                             int hoveredItemAmount = hoveredSlot.amount;
-
+                                            
                                             hoveredSlot.itemID = heldItemID;
                                             hoveredSlot.amount = heldItemAmount;
                                             heldItemID = hoveredItemID;
@@ -704,82 +823,34 @@ public class Player : MonoBehaviour
                                                 scannerSource.Play();
                                         }
                                     }
-                                }
-                                else // Place stack in empty slot
-                                {
-                                    hoveredSlot.itemID = heldItemID;
-                                    hoveredSlot.amount = heldItemAmount;
-                                    heldItemID = ItemID.none;
-                                    heldItemAmount = 0;
-
-                                    if (hoveredSlot == inventorySystem.scannerSlot)
-                                        scannerSource.Play();
-                                }
-                            }
-                        }
-                        else if (rightClick)
-                        {
-                            if (!holdingStack) // Not holding anything
-                            {
-                                if (hoveredSlotHasStack) // Pick up half of stack
-                                {
-                                    if (hoveredSlot.amount == 1)
+                                    else // Place one into empty slot
                                     {
-                                        heldItemID = hoveredSlot.itemID;
-                                        heldItemAmount = 1;
-                                        hoveredSlot.itemID = ItemID.none;
-                                        hoveredSlot.amount = 0;
-                                    }
-                                    else
-                                    {
-                                        int amountToTake = Mathf.FloorToInt(hoveredSlot.amount / 2);
-                                        hoveredSlot.amount -= amountToTake;
-                                        heldItemID = hoveredSlot.itemID;
-                                        heldItemAmount = amountToTake;
-                                    }
-                                }
-                            }
-                            else // Holding a stack
-                            {
-                                if (hoveredSlotHasStack)
-                                {
-                                    if (sameItemID && hoveredSlot.amount < 999) // Add one to slot stack (if possible)
-                                    {
-                                        hoveredSlot.amount++;
-                                        heldItemAmount--;
-                                    }
-                                    else // Swap slot stack with held stack
-                                    {
-                                        ItemID hoveredItemID = hoveredSlot.itemID;
-                                        int hoveredItemAmount = hoveredSlot.amount;
-                                        
                                         hoveredSlot.itemID = heldItemID;
-                                        hoveredSlot.amount = heldItemAmount;
-                                        heldItemID = hoveredItemID;
-                                        heldItemAmount = hoveredItemAmount;
-                                        //(hoveredSlot.itemID, hoveredSlot.amount) = (heldItemID, heldItemAmount);
+                                        hoveredSlot.amount = 1;
+                                        heldItemAmount--;
 
                                         if (hoveredSlot == inventorySystem.scannerSlot)
                                             scannerSource.Play();
                                     }
-                                }
-                                else // Place one into empty slot
-                                {
-                                    hoveredSlot.itemID = heldItemID;
-                                    hoveredSlot.amount = 1;
-                                    heldItemAmount--;
-
-                                    if (hoveredSlot == inventorySystem.scannerSlot)
-                                        scannerSource.Play();
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
-        UpdateInventoryUI();
+            UpdateInventoryUI();
+        }
+    }
+
+    public void Damage(int amount)
+    {
+        health = Mathf.Max(0, health - amount);
+        suitStatus = Mathf.Max(0, (int)(suitStatus - 0.8F*amount));
+        if (amount == 25 && !blockBreakSource.isPlaying) // Brown mob; play "explode" sound
+        {
+            blockBreakSource.Play();
+        }
     }
 
     private void ThrowStack(ItemID itemID, int amount)
@@ -787,7 +858,6 @@ public class Player : MonoBehaviour
         GameObject blockObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
         blockObj.transform.position = camera.transform.position;
         blockObj.hideFlags = HideFlags.HideInHierarchy;
-        blockObj.layer = LayerMask.NameToLayer("Dropped");
 
         Dropped droppedScript = blockObj.AddComponent<Dropped>();
         droppedScript.itemID = itemID;
@@ -822,6 +892,11 @@ public class Player : MonoBehaviour
         handAnimator.SetBool("IsDrilling", false);
         handParentAnimator.SetBool("IsDrilling", false);
         drillAnimator.SetBool("IsDrilling", false);
+    }
+
+    public bool IsDead()
+    {
+        return health == 0;
     }
 
     public ItemID GetSelectedItem()
@@ -1024,6 +1099,28 @@ public class Player : MonoBehaviour
             assemblerOutputImage.sprite = MeshData.GetItemSprite(ItemID.none);
             assemblerOutputAmount.text = "";
         }
+
+        // Update health and suit status
+        healthImage.fillAmount = health / 100F;
+        suitStatusImage.fillAmount = suitStatus / 100F;
+    }
+
+    public void BackToMainMenu()
+    {
+        // Reset player data
+        PlayerData playerData = new PlayerData();
+        playerData.positionX = GameData.CHUNK_SIZE / 2F;
+        playerData.positionY = 100;
+        playerData.positionZ = GameData.CHUNK_SIZE / 2F;
+        playerData.rotationY = GetComponent<FPSController>().GetPlayerRotationY();
+        playerData.cameraRotationX = GetComponent<FPSController>().GetCameraRotationX();
+        playerData.inventorySystem = inventorySystem;
+        playerData.health = 100;
+        playerData.suitStatus = 100;
+        using (FileStream fileStream = new FileStream(playerDataPath, FileMode.Create, FileAccess.Write))
+            (new BinaryFormatter()).Serialize(fileStream, playerData);
+
+        SceneManager.LoadScene("MainMenu");
     }
 
     public int GetJetpackLevel()
@@ -1066,6 +1163,8 @@ public class Player : MonoBehaviour
         playerData.rotationY = GetComponent<FPSController>().GetPlayerRotationY();
         playerData.cameraRotationX = GetComponent<FPSController>().GetCameraRotationX();
         playerData.inventorySystem = inventorySystem;
+        playerData.health = health;
+        playerData.suitStatus = suitStatus;
         using (FileStream fileStream = new FileStream(playerDataPath, FileMode.Create, FileAccess.Write))
             (new BinaryFormatter()).Serialize(fileStream, playerData);
     }

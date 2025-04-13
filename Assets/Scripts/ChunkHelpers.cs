@@ -1368,6 +1368,7 @@ public class ChunkHelpers
         //
         // Mobs
         //
+        // TODO: Solitary giraffes are too common. They should generally spawn in herds of 3-5.
         if (moonData.wildlifeLevel > 0)
         {
             int mobSpawnChance = UnityEngine.Random.Range(0, 10 - 2*moonData.wildlifeLevel);
@@ -1377,9 +1378,16 @@ public class ChunkHelpers
                 MobData[] mobs = new MobData[mobCount];
                 for (int i = 0; i < mobCount; i++)
                 {
-                    int mobType = UnityEngine.Random.Range(0, 3);
-                    if (mobType == 0 || mobType == 1 || mobType == 2) // Green/brown mobs (green ~ 0, brown ~ 1, giraffe ~ 2)
-                    {
+                    int mobType = UnityEngine.Random.Range(0, 10);
+                    if (mobType <= 3)
+                        mobType = 0;
+                    else if (mobType <= 7)
+                        mobType = 1;
+                    else
+                        mobType = 2;
+
+                    // if (mobType == 0 || mobType == 1 || mobType == 2) // Green/brown mobs (green ~ 0, brown ~ 1)
+                    // {
                         int localPosX = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
                         int localPosZ = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
                         int localPosY = 0;
@@ -1401,12 +1409,48 @@ public class ChunkHelpers
                         MobData mobData = new MobData();
                         mobData.mobID = mobType;
                         mobData.positionX = globalPos.x;
-                        mobData.positionY = globalPos.y;
+                        mobData.positionY = globalPos.y + ((mobType == 2) ? 2 : 0); // Giraffes need to be shifted up
                         mobData.positionZ = globalPos.z;
                         mobData.rotationY = 0;
                         mobData.aggressive = false;
                         mobs[i] = mobData;
-                    }
+                    //}
+                    // else if (mobType == 2) // Giraffe
+                    // {
+                    //     int herdSize = UnityEngine.Random.Range(1, (int)Mathf.Min(5, mobCount - i));
+                    //     int herdCenterX = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
+                    //     int herdCenterZ = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
+                    //     for (int j = 0; j < herdSize; j++)
+                    //     {
+                    //         int giraffePosX = herdCenterX + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterX), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterX));
+                    //         int giraffePosZ = herdCenterZ + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterZ), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterZ));
+                    //         int giraffePosY = 0;
+                    //         for (int k = 63; k < GameData.WORLD_HEIGHT_LIMIT; k++)
+                    //         {
+                    //             if (chunk[giraffePosX, k, giraffePosZ] == BlockID.air)
+                    //             {
+                    //                 giraffePosY = k;
+                    //                 break;
+                    //             }
+                    //         }
+
+                    //         Vector3 globalPos = new Vector3(
+                    //             chunkX*GameData.CHUNK_SIZE + giraffePosX,
+                    //             giraffePosY,
+                    //             chunkZ*GameData.CHUNK_SIZE + giraffePosZ
+                    //         );
+
+                    //         MobData mobData = new MobData();
+                    //         mobData.mobID = mobType;
+                    //         mobData.positionX = globalPos.x;
+                    //         mobData.positionY = globalPos.y;
+                    //         mobData.positionZ = globalPos.z;
+                    //         mobData.rotationY = 0;
+                    //         mobData.aggressive = false;
+                    //         mobs[i + j] = mobData;
+                    //     }
+                    //     i += herdSize;
+                    // }
                 }
                 MobHelpers.SaveMobsToChunk(mobs, moonData.moon, chunkX, chunkZ);
             }

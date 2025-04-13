@@ -3,13 +3,19 @@ using UnityEngine.SceneManagement;
 
 public class PauseMenu : MonoBehaviour
 {
+    private Player player;
     public GameObject pauseMenu;
     public GameObject optionsMenu;
     private bool paused = false;
 
+    void Awake()
+    {
+        player = GameObject.Find("Player").GetComponent<Player>();
+    }
+
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
+        if (Input.GetKeyDown(KeyCode.Escape) && !player.IsDead())
         {
             if (IsPaused())
             {

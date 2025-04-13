@@ -61,143 +61,151 @@ public class FPSController : MonoBehaviour
 
     void Update()
     {
-        // Update SFX volume
-        float sfxVolume = OptionsManager.GetCurrentOptions().sfxVolume;
-        jetpackSource.volume = sfxVolume;
-        jumpSource.volume = sfxVolume;
-        landSource.volume = sfxVolume;
-
-        // Update mouse sensitivity
-        Options options = OptionsManager.GetCurrentOptions();
-        lookSpeed = options.sensitivity;
-
-        // Ice stuff
-        /*
-
-        startedMovingOnIce += Time.deltaTime;
-        walkSpeed = f(walkSpeed, startedMovingOnIce)
-
-        determine inertia vector and add it to moveDirection
-
-        update inertia vector by dividing it each frame until it's ~0, then clamp
-
-        if not on ice, cancel inertia and reset walk speed
-
-        */
-
-        // Update movement direction
-        Vector3 forward = transform.TransformDirection(Vector3.forward);
-        Vector3 right = transform.TransformDirection(Vector3.right);
-        float mouseSpeedFB = walkSpeed * Input.GetAxis("Vertical");
-        float mouseSpeedLR = walkSpeed * Input.GetAxis("Horizontal");
-        float movementDirectionY = moveDirection.y;
-        moveDirection = (forward * mouseSpeedFB) + (right * mouseSpeedLR) + moveDirection.y*Vector3.up;
-
-        bool isPaused = pauseMenu.IsPaused();
-        bool inventoryOpen = inventoryUI.activeSelf;
-        bool isNowGrounded = (Physics.OverlapBox(transform.position - new Vector3(0, 1F, 0), new Vector3(0.4F, 0.1F, 0.4F), Quaternion.identity, LayerMask.GetMask("Block"))).Length > 0;
-        if (!isGrounded && isNowGrounded)
+        if (!player.IsDead())
         {
-            if (fallTime >= 0.5F) // 0.5 seconds ~ 3 blocks
-                landSource.Play();
-            fallTime = 0;
-        }
-        else if (!isNowGrounded)
-        {
-            fallTime += Time.deltaTime;
-        }
-        isGrounded = isNowGrounded;
+            // Update SFX volume
+            float sfxVolume = OptionsManager.GetCurrentOptions().sfxVolume;
+            jetpackSource.volume = sfxVolume;
+            jumpSource.volume = sfxVolume;
+            landSource.volume = sfxVolume;
 
-        // Jump/fly
-        float jetpackFuel = player.GetJetpackFuel();
-        int jetpackLevel = player.GetJetpackLevel();
-        bool flying = false;
-        if (!(isPaused || inventoryOpen))
-        {
-            if (Input.GetKeyDown(KeyCode.Space))
+            // Update mouse sensitivity
+            Options options = OptionsManager.GetCurrentOptions();
+            lookSpeed = options.sensitivity;
+
+            // Ice stuff
+            /*
+
+            startedMovingOnIce += Time.deltaTime;
+            walkSpeed = f(walkSpeed, startedMovingOnIce)
+
+            determine inertia vector and add it to moveDirection
+
+            update inertia vector by dividing it each frame until it's ~0, then clamp
+
+            if not on ice, cancel inertia and reset walk speed
+
+            */
+
+            // Update movement direction
+            Vector3 forward = transform.TransformDirection(Vector3.forward);
+            Vector3 right = transform.TransformDirection(Vector3.right);
+            float mouseSpeedFB = walkSpeed * Input.GetAxis("Vertical");
+            float mouseSpeedLR = walkSpeed * Input.GetAxis("Horizontal");
+            float movementDirectionY = moveDirection.y;
+            moveDirection = (forward * mouseSpeedFB) + (right * mouseSpeedLR) + moveDirection.y*Vector3.up;
+
+            bool isPaused = pauseMenu.IsPaused();
+            bool inventoryOpen = inventoryUI.activeSelf;
+            bool isNowGrounded = (Physics.OverlapBox(transform.position - new Vector3(0, 1F, 0), new Vector3(0.4F, 0.1F, 0.4F), Quaternion.identity, LayerMask.GetMask("Block"))).Length > 0;
+            if (!isGrounded && isNowGrounded)
             {
-                if (isGrounded)
-                {
-                    moveDirection.y = jumpSpeed;
-                    jumpSource.Play();
-                }
+                if (fallTime >= 0.5F) // 0.5 seconds ~ 3 blocks
+                    landSource.Play();
+                fallTime = 0;
             }
-            else if (Input.GetKey(KeyCode.Space))
+            else if (!isNowGrounded)
             {
-                if (timeStartedFlying == -1)
-                    timeStartedFlying = Time.time;
+                fallTime += Time.deltaTime;
+            }
+            isGrounded = isNowGrounded;
 
-                if (jetpackLevel > 0 && jetpackFuel > 0 && Time.time - timeStartedFlying > 0.2F)
+            // Jump/fly
+            float jetpackFuel = player.GetJetpackFuel();
+            int jetpackLevel = player.GetJetpackLevel();
+            bool flying = false;
+            if (!(isPaused || inventoryOpen))
+            {
+                if (Input.GetKeyDown(KeyCode.Space))
                 {
-                    flying = true;
-                    moveDirection.y = 0.5F * jetpackLevel * jumpSpeed;
-                    float fuelLossRate = 0.8F / jetpackLevel;
-                    player.SetJetpackFuel(jetpackFuel - fuelLossRate * Time.deltaTime);
-                    if (!jetpackSource.isPlaying)
-                        jetpackSource.Play();
+                    if (isGrounded)
+                    {
+                        moveDirection.y = jumpSpeed;
+                        jumpSource.Play();
+                    }
+                }
+                else if (Input.GetKey(KeyCode.Space))
+                {
+                    if (timeStartedFlying == -1)
+                        timeStartedFlying = Time.time;
+
+                    if (jetpackLevel > 0 && jetpackFuel > 0 && Time.time - timeStartedFlying > 0.2F)
+                    {
+                        flying = true;
+                        moveDirection.y = 0.5F * jetpackLevel * jumpSpeed;
+                        float fuelLossRate = 0.8F / jetpackLevel;
+                        player.SetJetpackFuel(jetpackFuel - fuelLossRate * Time.deltaTime);
+                        if (!jetpackSource.isPlaying)
+                            jetpackSource.Play();
+                    }
+                    else
+                    {
+                        jetpackSource.Stop();
+                    }
+
+                    if (jetpackFuel < 0.01F)
+                        fuelDepletedTime = Time.time;
                 }
                 else
                 {
                     jetpackSource.Stop();
-                }
 
-                if (jetpackFuel < 0.01F)
-                    fuelDepletedTime = Time.time;
-            }
-            else
-            {
-                jetpackSource.Stop();
-
-                timeStartedFlying = -1;
-                if (Time.time - fuelDepletedTime > 0.5F)
-                {
-                    float fuelGainRate = 0.1F * jetpackLevel;
-                    player.SetJetpackFuel(jetpackFuel + fuelGainRate * Time.deltaTime);
-                }
-            }
-        }
-
-        // Apply movement
-        if (!isPaused)
-        {
-            // Gravity
-            if (!isGrounded && !flying)
-            {
-                moveDirection.y -= gravity * Time.deltaTime;
-            }
-
-            // Allow player to fall, even if in inventory
-            Vector3 verticalMoveDirection = new Vector3(0, moveDirection.y, 0);
-            characterController.Move(Time.deltaTime * verticalMoveDirection);
-
-            if (!inventoryOpen)
-            {
-                // Move
-                if (moveDirection != Vector3.zero)
-                {
-                    Vector3 horizontalMoveDirection = moveDirection - verticalMoveDirection;
-                    characterController.Move(Time.deltaTime * horizontalMoveDirection);
-                    if (isGrounded && horizontalMoveDirection.magnitude > 0)
+                    timeStartedFlying = -1;
+                    if (Time.time - fuelDepletedTime > 0.5F)
                     {
-                        if (!bobbing)
+                        float fuelGainRate = 0.1F * jetpackLevel;
+                        player.SetJetpackFuel(jetpackFuel + fuelGainRate * Time.deltaTime);
+                    }
+                }
+            }
+
+            // Apply movement
+            if (!isPaused)
+            {
+                // Gravity
+                if (!isGrounded && !flying)
+                {
+                    moveDirection.y -= gravity * Time.deltaTime;
+                }
+
+                // Allow player to fall, even if in inventory
+                Vector3 verticalMoveDirection = new Vector3(0, moveDirection.y, 0);
+                characterController.Move(Time.deltaTime * verticalMoveDirection);
+
+                if (!inventoryOpen)
+                {
+                    // Move
+                    if (moveDirection != Vector3.zero)
+                    {
+                        Vector3 horizontalMoveDirection = moveDirection - verticalMoveDirection;
+                        characterController.Move(Time.deltaTime * horizontalMoveDirection);
+                        if (isGrounded && horizontalMoveDirection.magnitude > 0)
                         {
-                            bobbing = true;
-                            bobAnimator.SetBool("IsMoving", true);
+                            if (!bobbing)
+                            {
+                                bobbing = true;
+                                bobAnimator.SetBool("IsMoving", true);
+                            }
+                        }
+                        else if (bobbing)
+                        {
+                            bobbing = false;
+                            bobAnimator.SetBool("IsMoving", false);
                         }
                     }
-                    else if (bobbing)
-                    {
-                        bobbing = false;
-                        bobAnimator.SetBool("IsMoving", false);
-                    }
-                }
 
-                // Rotate
-                cameraRotationX += -Input.GetAxis("Mouse Y") * lookSpeed;
-                cameraRotationX = Mathf.Clamp(cameraRotationX, -90, 90);
-                playerRotationY += Input.GetAxis("Mouse X") * lookSpeed;
-                playerCamera.transform.localRotation = Quaternion.Euler(cameraRotationX, 0, 0);
-                transform.localRotation = Quaternion.Euler(0, playerRotationY, 0);
+                    // Rotate
+                    cameraRotationX += -Input.GetAxis("Mouse Y") * lookSpeed;
+                    cameraRotationX = Mathf.Clamp(cameraRotationX, -90, 90);
+                    playerRotationY += Input.GetAxis("Mouse X") * lookSpeed;
+                    playerCamera.transform.localRotation = Quaternion.Euler(cameraRotationX, 0, 0);
+                    transform.localRotation = Quaternion.Euler(0, playerRotationY, 0);
+                }
+                else
+                {
+                    bobbing = false;
+                    bobAnimator.SetBool("IsMoving", false);
+                }
             }
         }
     }

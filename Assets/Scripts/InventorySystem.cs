@@ -68,7 +68,9 @@ public class Inventory
 
             slots[1][0] = new InventorySlot(ItemID.sand, 999);
             slots[1][1] = new InventorySlot(ItemID.zircon_ore, 999);
-            slots[1][2] = new InventorySlot(ItemID.minilight, 999);
+            slots[1][2] = new InventorySlot(ItemID.silver_ore, 999);
+            slots[1][3] = new InventorySlot(ItemID.shale_gravel, 999);
+            slots[1][4] = new InventorySlot(ItemID.minilight, 999);
 
             slots[0][0] = new InventorySlot(ItemID.drill_t3, 1);
             slots[0][1] = new InventorySlot(ItemID.slug_pistol_t3, 1);

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 class GreenMob : MonoBehaviour
 {
@@ -33,86 +34,89 @@ class GreenMob : MonoBehaviour
 
     void Update()
     {
-        float currentTime = Time.realtimeSinceStartup;
-
-        if (timeDamaged != 0 && Time.time - timeDamaged > 0.15F)
+        if (SceneManager.GetActiveScene().buildIndex == 1)
         {
-            GetComponent<Renderer>().material.color = Color.white;
-            timeDamaged = 0;
-        }
+            float currentTime = Time.realtimeSinceStartup;
 
-        if (health > 0)
-        {
-            if (!aboutToAct)
+            if (timeDamaged != 0 && Time.time - timeDamaged > 0.15F)
             {
-                nextActionDelay = UnityEngine.Random.Range(1, 5); // Wait 1-4 seconds before next action
-                aboutToAct = true;
+                GetComponent<Renderer>().material.color = Color.white;
+                timeDamaged = 0;
             }
-            
-            if (!(rotating || jumping))
-            {
-                if (currentTime - lastActionTime > nextActionDelay)
-                {
-                    int action = UnityEngine.Random.Range(0, 3);
-                    if (action == 0) // Rotate
-                    {
-                        int direction = UnityEngine.Random.Range(0, 2);
-                        if (direction == 0)
-                            targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y + 45, 0);
-                        else
-                            targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y - 45, 0);
 
-                        // Reset state for rotation calculations
-                        initialRotation = transform.rotation;
-                        rotationTimeElapsed = 0;
-                        rotating = true;
-                    }
-                    else // Jump forward
+            if (health > 0)
+            {
+                if (!aboutToAct)
+                {
+                    nextActionDelay = UnityEngine.Random.Range(1, 5); // Wait 1-4 seconds before next action
+                    aboutToAct = true;
+                }
+                
+                if (!(rotating || jumping))
+                {
+                    if (currentTime - lastActionTime > nextActionDelay)
                     {
-                        Vector3 force = 5F * (-transform.forward + 2*transform.up);
-                        rigidbody.AddForce(force, ForceMode.Impulse);
-                        lastJumpTime = currentTime;
-                        jumping = true;
-                        rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
+                        int action = UnityEngine.Random.Range(0, 3);
+                        if (action == 0) // Rotate
+                        {
+                            int direction = UnityEngine.Random.Range(0, 2);
+                            if (direction == 0)
+                                targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y + 45, 0);
+                            else
+                                targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y - 45, 0);
+
+                            // Reset state for rotation calculations
+                            initialRotation = transform.rotation;
+                            rotationTimeElapsed = 0;
+                            rotating = true;
+                        }
+                        else // Jump forward
+                        {
+                            Vector3 force = 5F * (-transform.forward + 2*transform.up);
+                            rigidbody.AddForce(force, ForceMode.Impulse);
+                            lastJumpTime = currentTime;
+                            jumping = true;
+                            rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
+                        }
+                        lastActionTime = currentTime;
+                        aboutToAct = false;
                     }
-                    lastActionTime = currentTime;
-                    aboutToAct = false;
+                }
+                else
+                {
+                    lastActionTime += Time.deltaTime; // This ensures that the delay only starts after the mob is done acting
+                }
+
+                if (rotating)
+                {
+                    rotationTimeElapsed += Time.deltaTime;
+                    float t = rotationTimeElapsed / rotationDuration;
+                    transform.rotation = Quaternion.Lerp(initialRotation, targetRotation, t);
+                    if (t > 0.99F)
+                        rotating = false;
+                }
+
+                if (jumping && currentTime - lastJumpTime > 4)
+                {
+                    jumping = false;
+                    rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
                 }
             }
             else
             {
-                lastActionTime += Time.deltaTime; // This ensures that the delay only starts after the mob is done acting
-            }
-
-            if (rotating)
-            {
-                rotationTimeElapsed += Time.deltaTime;
-                float t = rotationTimeElapsed / rotationDuration;
-                transform.rotation = Quaternion.Lerp(initialRotation, targetRotation, t);
-                if (t > 0.99F)
-                    rotating = false;
-            }
-
-            if (jumping && currentTime - lastJumpTime > 4)
-            {
-                jumping = false;
-                rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-            }
-        }
-        else
-        {
-            if (!deathAnimationFinished)
-            {
-                // Rotate
-                rigidbody.constraints = RigidbodyConstraints.None;
-                if (transform.eulerAngles.z - 90 < 0.5F)
-                    transform.RotateAround(transform.position + 0.5F*Vector3.down + 0.5F*transform.right, transform.forward, 90 * Time.deltaTime);
-                else
-                    deathAnimationFinished = true;
-            }
-            else if (Time.time - timeDied > 3)
-            {
-                Destroy(gameObject);
+                if (!deathAnimationFinished)
+                {
+                    // Rotate
+                    rigidbody.constraints = RigidbodyConstraints.None;
+                    if (transform.eulerAngles.z - 90 < 0.5F)
+                        transform.RotateAround(transform.position + 0.5F*Vector3.down + 0.5F*transform.right, transform.forward, 90 * Time.deltaTime);
+                    else
+                        deathAnimationFinished = true;
+                }
+                else if (Time.time - timeDied > 3)
+                {
+                    Destroy(gameObject);
+                }
             }
         }
     }

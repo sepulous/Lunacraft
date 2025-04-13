@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class SpaceGiraffe : MonoBehaviour
 {
@@ -14,8 +15,9 @@ public class SpaceGiraffe : MonoBehaviour
 
     // Walking data
     private bool walking = false;
-    private float distanceToWalk = 0;
-    private Vector3 initialPosition;
+    private float timeToWalk = 0;
+    private float timeStartedWalking;
+    private bool shouldJump = false;
 
     // Rotation data
     private bool rotating = false;
@@ -35,95 +37,118 @@ public class SpaceGiraffe : MonoBehaviour
 
     void Update()
     {
-        float currentTime = Time.realtimeSinceStartup;
-
-        if (timeDamaged != 0 && Time.time - timeDamaged > 0.15F)
+        if (SceneManager.GetActiveScene().buildIndex == 1)
         {
-            foreach (Renderer renderer in GetComponentsInChildren<Renderer>())
-                renderer.material.color = new Color(1, 1, 1, 1);
-            timeDamaged = 0;
-        }
+            float currentTime = Time.realtimeSinceStartup;
 
-        if (health > 0)
-        {
-            if (!(walking || rotating))
+            transform.rotation = Quaternion.Euler(0, transform.eulerAngles.y, 0);
+
+            if (timeDamaged != 0 && Time.time - timeDamaged > 0.15F)
             {
-                if (currentTime - lastActionTime > actionDelay)
+                foreach (Renderer renderer in GetComponentsInChildren<Renderer>())
+                    renderer.material.color = new Color(1, 1, 1, 1);
+                timeDamaged = 0;
+            }
+
+            if (health > 0)
+            {
+                if (!(walking || rotating))
                 {
-                    int action = UnityEngine.Random.Range(1, 5);
-                    if (action < 4) // Walk
+                    if (currentTime - lastActionTime > actionDelay)
                     {
-                        // TODO: Sometimes they jump right before walking
-                        walking = true;
-                        distanceToWalk = UnityEngine.Random.Range(3, 7);
-                        initialPosition = transform.position;
+                        int action = UnityEngine.Random.Range(1, 5);
+                        if (action < 4) // Walk
+                        {
+                            // TODO: Sometimes they jump right before walking
+                            walking = true;
+                            timeToWalk = UnityEngine.Random.Range(4, 9);
+                            timeStartedWalking = Time.time;
+                        }
+                        else // Rotate
+                        {
+                            int direction = UnityEngine.Random.Range(0, 2);
+                            if (direction == 0)
+                                targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y + 45, 0);
+                            else
+                                targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y - 45, 0);
+
+                            // Reset state for rotation calculations
+                            initialRotation = transform.rotation;
+                            rotationTimeElapsed = 0;
+                            rotating = true;
+                        }
+
+                        lastActionTime = currentTime;
                     }
-                    else // Rotate
+                }
+                else
+                {
+                    lastActionTime += Time.deltaTime;
+                }
+
+                if (walking)
+                {
+                    float timeWalked = Time.time - timeStartedWalking;
+                    if (timeWalked >= timeToWalk)
                     {
-                        int direction = UnityEngine.Random.Range(0, 2);
-                        if (direction == 0)
-                            targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y + 45, 0);
-                        else
-                            targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y - 45, 0);
+                        foreach (var animator in animators)
+                            animator.SetBool("Walking", false);
 
-                        // Reset state for rotation calculations
-                        initialRotation = transform.rotation;
-                        rotationTimeElapsed = 0;
-                        rotating = true;
+                        walking = false;
+                        rigidbody.linearVelocity = Vector3.zero;
                     }
+                    else
+                    {
+                        foreach (var animator in animators)
+                            animator.SetBool("Walking", true);
 
-                    lastActionTime = currentTime;
+                        rigidbody.linearVelocity = new Vector3(-transform.forward.x, rigidbody.linearVelocity.y, -transform.forward.z);
+
+                        // Jump over obstacles
+                        Collider[] obstacles = Physics.OverlapSphere(transform.position - (new Vector3(0, -0.2F, 1.6F*transform.forward.z)), 0.9F, LayerMask.GetMask("Block"));
+                        if (obstacles.Length > 0)
+                        {
+                            Vector3 force = 2F * (-transform.forward + transform.up);
+                            rigidbody.AddForce(force, ForceMode.Impulse);
+                        }
+                    }
+                }
+
+                if (rotating)
+                {
+                    rotationTimeElapsed += Time.deltaTime;
+                    float t = rotationTimeElapsed / rotationDuration;
+                    transform.rotation = Quaternion.Lerp(initialRotation, targetRotation, t);
+                    if (t > 0.99F)
+                        rotating = false;
                 }
             }
             else
             {
-                lastActionTime += Time.deltaTime;
-            }
-
-            if (walking)
-            {
-                float distanceWalked = (transform.position - initialPosition).magnitude;
-                if (distanceWalked >= distanceToWalk)
+                if (!deathAnimationFinished)
                 {
-                    foreach (var animator in animators)
-                        animator.SetBool("Walking", false);
-
-                    walking = false;
-                    rigidbody.linearVelocity = Vector3.zero;
+                    // Rotate
+                    rigidbody.constraints = RigidbodyConstraints.None;
+                    if (transform.eulerAngles.z - 90 < 0.5F)
+                        transform.RotateAround(transform.position + 1.8F*Vector3.down, transform.forward, 90 * Time.deltaTime);
+                    else
+                        deathAnimationFinished = true;
                 }
-                else
+                else if (Time.time - timeDied > 3)
                 {
-                    foreach (var animator in animators)
-                        animator.SetBool("Walking", true);
-
-                    rigidbody.linearVelocity = -1F * (new Vector3(transform.forward.x, 0, transform.forward.z));
+                    Destroy(gameObject);
                 }
-            }
-
-            if (rotating)
-            {
-                rotationTimeElapsed += Time.deltaTime;
-                float t = rotationTimeElapsed / rotationDuration;
-                transform.rotation = Quaternion.Lerp(initialRotation, targetRotation, t);
-                if (t > 0.99F)
-                    rotating = false;
             }
         }
-        else
+    }
+
+    void FixedUpdate()
+    {
+        if (shouldJump)
         {
-            if (!deathAnimationFinished)
-            {
-                // Rotate
-                rigidbody.constraints = RigidbodyConstraints.None;
-                if (transform.eulerAngles.z - 90 < 0.5F)
-                    transform.RotateAround(transform.position + 1.8F*Vector3.down, transform.forward, 90 * Time.deltaTime);
-                else
-                    deathAnimationFinished = true;
-            }
-            else if (Time.time - timeDied > 3)
-            {
-                Destroy(gameObject);
-            }
+            Vector3 force = 2F * (-transform.forward + 2*transform.up);
+            rigidbody.AddForce(force, ForceMode.Impulse);
+            shouldJump = false;
         }
     }
 
@@ -140,6 +165,8 @@ public class SpaceGiraffe : MonoBehaviour
                 rigidbody.constraints = RigidbodyConstraints.FreezePosition | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY;
                 rigidbody.useGravity = false;
                 rigidbody.linearVelocity = Vector3.zero;
+                walking = false;
+                rotating = false;
                 foreach (var animator in animators)
                     animator.SetBool("Walking", false);
                 timeDied = Time.time;

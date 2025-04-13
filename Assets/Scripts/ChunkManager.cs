@@ -46,6 +46,10 @@ public class ChunkManager : MonoBehaviour
 
     private bool generating = false;
 
+    // Brown mobs
+    private bool brownMobExploded = false;
+    private Vector3 brownMobExplodePos = Vector3.zero;
+
     /*
 
     Periodically check whether any chunks that should have loaded are loaded, and create/load them if not
@@ -120,6 +124,197 @@ public class ChunkManager : MonoBehaviour
 
         renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
 
+        /*
+
+        Method 1:
+            Use a bigger sphere to instantiate the blocks that will be exploded, as well as their neighbors, and then use the existing code.
+
+        Method 2:
+            Similar to Method 1, but instead of instantiating all of them, only instantiate the neighbor blocks and blocks that aren't destroyed
+
+
+        How about this: Get all discrete global block positions within some distance from the sphere center, and use those to find the appropriate chunks
+                        and access their block data
+
+        */
+
+        // Brown mob exploding
+        if (brownMobExploded)
+        {
+            // Vector3 spherePos = brownMobExplodePos + 2F*Vector3.down;
+            // Collider[] hits = Physics.OverlapSphere(spherePos, 4F, LayerMask.GetMask("Block"));
+            // if (hits.Length > 0)
+            // {
+            //     // Destroy blocks
+            //     foreach (Collider hit in hits)
+            //     {
+            //         GameObject hitBlock = hit.gameObject;
+            //         BlockData hitBlockData = hitBlock.GetComponent<BlockData>();
+            //         ChunkData hitBlockChunkData = hitBlock.transform.parent.GetComponent<ChunkData>();
+            //         float distanceFromExplodePoint = (hitBlock.transform.position - spherePos).magnitude;
+
+            //         if (distanceFromExplodePoint <= 3.9F || UnityEngine.Random.Range(0, 10) <= 8)
+            //         {
+            //             BlockID blockToDrop = hitBlockData.blockID;
+
+            //             // Alchemy
+            //             BlockID alchemyProduct = Alchemy.GetAlchemyProduct(hitBlockData.blockID);
+            //             if (alchemyProduct != BlockID.unknown && UnityEngine.Random.Range(0, 5) == 0) // 20% chance for alchemy
+            //                 blockToDrop = alchemyProduct;
+
+            //             // Drop
+            //             hitBlockChunkData.blocks[hitBlockData.localPosX, hitBlockData.localPosY, hitBlockData.localPosZ] = BlockID.air;
+            //             if (blockToDrop == alchemyProduct)
+            //                 hitBlock.GetComponent<Renderer>().material.SetTexture("_BaseTexture", Resources.Load<Texture2D>("Textures/Blocks/" + blockToDrop.ToString()));
+            //             Dropped droppedScript = hitBlock.AddComponent<Dropped>();
+            //             droppedScript.itemID = (ItemID)Enum.Parse(typeof(ItemID), blockToDrop.ToString());
+            //             droppedScript.Drop();
+            //         }
+            //     }
+
+            //     // Patch holes in map
+            //     foreach (Collider hit in hits)
+            //     {
+            //         GameObject hitBlock = hit.gameObject;
+            //         BlockData hitBlockData = hitBlock.GetComponent<BlockData>();
+            //         ChunkData hitBlockChunkData = hitBlock.transform.parent.GetComponent<ChunkData>();
+            //         hitBlock.transform.SetParent(null); // Should be done here, since we need the parent right above
+                    
+            //         int selectedGlobalPosX = (int)hitBlock.transform.position.x;
+            //         int selectedGlobalPosY = (int)hitBlock.transform.position.y;
+            //         int selectedGlobalPosZ = (int)hitBlock.transform.position.z;
+            //         Vector3[] neighborGlobalPositions = {
+            //             new Vector3(selectedGlobalPosX - 1, selectedGlobalPosY, selectedGlobalPosZ),
+            //             new Vector3(selectedGlobalPosX, selectedGlobalPosY - 1, selectedGlobalPosZ),
+            //             new Vector3(selectedGlobalPosX, selectedGlobalPosY, selectedGlobalPosZ - 1),
+            //             new Vector3(selectedGlobalPosX + 1, selectedGlobalPosY, selectedGlobalPosZ),
+            //             new Vector3(selectedGlobalPosX, selectedGlobalPosY + 1, selectedGlobalPosZ),
+            //             new Vector3(selectedGlobalPosX, selectedGlobalPosY, selectedGlobalPosZ + 1)
+            //         };
+            //         foreach (Vector3 neighborGlobalPos in neighborGlobalPositions)
+            //         {
+            //             Collider[] neighborCheck = Physics.OverlapBox(neighborGlobalPos, new Vector3(0.1F, 0.1F, 0.1F));
+            //             if (neighborCheck.Length == 0) // Neighbor of destroyed block doesn't already exist
+            //             {
+            //                 int neighborChunkX = Mathf.FloorToInt(neighborGlobalPos.x / GameData.CHUNK_SIZE);
+            //                 int neighborChunkZ = Mathf.FloorToInt(neighborGlobalPos.z / GameData.CHUNK_SIZE);
+            //                 ChunkData neighborChunkData = chunkParent.transform.Find($"Chunk ({neighborChunkX},{neighborChunkZ})").GetComponent<ChunkData>();
+            //                 Vector3 neighborLocalPos = ChunkHelpers.GetLocalBlockPos(neighborGlobalPos);
+            //                 BlockID neighborBlock = neighborChunkData.blocks[(int)neighborLocalPos.x, (int)neighborLocalPos.y, (int)neighborLocalPos.z];
+            //                 if (neighborBlock != BlockID.air)
+            //                     SpawnBlock(neighborBlock, neighborChunkData.gameObject, neighborLocalPos, new Vector3(neighborChunkX, 0, neighborChunkZ));
+            //             }
+            //         }
+            //     }
+            // }
+
+            Vector3 spherePos = brownMobExplodePos + 2F*Vector3.down;
+
+            // Get hit block data (has to be calculated since most aren't instantiated yet)
+            int explodePosX = (int)brownMobExplodePos.x;
+            int explodePosY = (int)brownMobExplodePos.y;
+            int explodePosZ = (int)brownMobExplodePos.z;
+            List<Vector3> hitBlockGlobalPositions = new List<Vector3>();
+            for (int x = -3; x <= 3; x++)
+            {
+                for (int y = -3; y <= 3; y++)
+                {
+                    for (int z = -3; z <= 3; z++)
+                    {
+                        if (x*x + y*y + z*z <= 3*3)
+                            hitBlockGlobalPositions.Add(new Vector3(explodePosX + x, explodePosY + y, explodePosZ + z));
+                    }
+                }
+            }
+
+            // Destroy blocks
+            foreach (Vector3 hitBlockGlobalPos in hitBlockGlobalPositions)
+            {
+                int parentChunkX = Mathf.FloorToInt(hitBlockGlobalPos.x / GameData.CHUNK_SIZE);
+                int parentChunkZ = Mathf.FloorToInt(hitBlockGlobalPos.z / GameData.CHUNK_SIZE);
+                ChunkData parentChunkData = chunkParent.transform.Find($"Chunk ({parentChunkX},{parentChunkZ})").GetComponent<ChunkData>();
+                Vector3 hitBlockLocalPos = ChunkHelpers.GetLocalBlockPos(hitBlockGlobalPos);
+                BlockID hitBlockID = parentChunkData.blocks[(int)hitBlockLocalPos.x, (int)hitBlockLocalPos.y, (int)hitBlockLocalPos.z];
+
+                if (hitBlockID != BlockID.air)
+                {
+                    float distanceFromExplodePoint = (hitBlockGlobalPos - spherePos).magnitude;
+                    if (distanceFromExplodePoint <= 2.5F || UnityEngine.Random.Range(0, 10) <= 8)
+                    {
+                        BlockID blockToDrop = hitBlockID;
+
+                        // Alchemy
+                        BlockID alchemyProduct = Alchemy.GetAlchemyProduct(hitBlockID);
+                        if (alchemyProduct != BlockID.unknown && UnityEngine.Random.Range(0, 5) == 0) // 20% chance for alchemy, when possible
+                            blockToDrop = alchemyProduct;
+
+                        // Drop
+                        parentChunkData.blocks[(int)hitBlockLocalPos.x, (int)hitBlockLocalPos.y, (int)hitBlockLocalPos.z] = BlockID.air;
+
+                        GameObject hitBlock;
+                        Collider[] hits = Physics.OverlapBox(hitBlockGlobalPos, new Vector3(0.1F, 0.1F, 0.1F), Quaternion.identity, LayerMask.GetMask("Block"));
+                        if (hits.Length > 0) // Get existing block to drop
+                        {
+                            hitBlock = hits[0].gameObject;
+                        }
+                        else // Create block to drop
+                        {
+                            hitBlock = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                            hitBlock.transform.position = hitBlockGlobalPos;
+                            hitBlock.hideFlags = HideFlags.HideInHierarchy;
+                            hitBlock.GetComponent<MeshFilter>().mesh = blockMesh;
+                            hitBlock.GetComponent<Renderer>().material = blockMaterials[(int)blockToDrop];
+                        }
+
+                        if (blockToDrop == alchemyProduct)
+                            hitBlock.GetComponent<Renderer>().material.SetTexture("_BaseTexture", Resources.Load<Texture2D>("Textures/Blocks/" + blockToDrop.ToString()));
+                        Dropped droppedScript = hitBlock.AddComponent<Dropped>();
+                        droppedScript.itemID = (ItemID)Enum.Parse(typeof(ItemID), blockToDrop.ToString());
+                        droppedScript.Drop();
+                    }
+                }
+            }
+
+            // Patch holes in map
+            List<Vector3> blocksBroughtBack = new List<Vector3>();
+            foreach (Vector3 hitBlockGlobalPos in hitBlockGlobalPositions)
+            {
+                int hitGlobalPosX = (int)hitBlockGlobalPos.x;
+                int hitGlobalPosY = (int)hitBlockGlobalPos.y;
+                int hitGlobalPosZ = (int)hitBlockGlobalPos.z;
+                Vector3[] neighborGlobalPositions = {
+                    new Vector3(hitGlobalPosX - 1, hitGlobalPosY, hitGlobalPosZ),
+                    new Vector3(hitGlobalPosX, hitGlobalPosY - 1, hitGlobalPosZ),
+                    new Vector3(hitGlobalPosX, hitGlobalPosY, hitGlobalPosZ - 1),
+                    new Vector3(hitGlobalPosX + 1, hitGlobalPosY, hitGlobalPosZ),
+                    new Vector3(hitGlobalPosX, hitGlobalPosY + 1, hitGlobalPosZ),
+                    new Vector3(hitGlobalPosX, hitGlobalPosY, hitGlobalPosZ + 1)
+                };
+                foreach (Vector3 neighborGlobalPos in neighborGlobalPositions)
+                {
+                    if (blocksBroughtBack.Contains(neighborGlobalPos)) // Don't bring back blocks that were just exploded
+                        continue;
+
+                    Collider[] neighborCheck = Physics.OverlapBox(neighborGlobalPos, new Vector3(0.1F, 0.1F, 0.1F));
+                    if (neighborCheck.Length == 0) // Neighbor of destroyed block doesn't already exist
+                    {
+                        int neighborChunkX = Mathf.FloorToInt(neighborGlobalPos.x / GameData.CHUNK_SIZE);
+                        int neighborChunkZ = Mathf.FloorToInt(neighborGlobalPos.z / GameData.CHUNK_SIZE);
+                        ChunkData neighborChunkData = chunkParent.transform.Find($"Chunk ({neighborChunkX},{neighborChunkZ})").GetComponent<ChunkData>();
+                        Vector3 neighborLocalPos = ChunkHelpers.GetLocalBlockPos(neighborGlobalPos);
+                        BlockID neighborBlock = neighborChunkData.blocks[(int)neighborLocalPos.x, (int)neighborLocalPos.y, (int)neighborLocalPos.z];
+                        if (neighborBlock != BlockID.air)
+                        {
+                            blocksBroughtBack.Add(neighborGlobalPos);
+                            SpawnBlock(neighborBlock, neighborChunkData.gameObject, neighborLocalPos, new Vector3(neighborChunkX, 0, neighborChunkZ));
+                        }
+                    }
+                }
+            }
+
+            brownMobExploded = false;
+        }
+
         // Block destruction
         if (player.DestroyedBlock())
         {
@@ -149,33 +344,18 @@ public class ChunkManager : MonoBehaviour
                 new Vector3(selectedGlobalPosX, selectedGlobalPosY + 1, selectedGlobalPosZ),
                 new Vector3(selectedGlobalPosX, selectedGlobalPosY, selectedGlobalPosZ + 1)
             };
-            foreach (Vector3 neighborPos in neighborGlobalPositions)
+            foreach (Vector3 neighborGlobalPos in neighborGlobalPositions)
             {
-                Collider[] hits = Physics.OverlapBox(neighborPos, new Vector3(0.1F, 0.1F, 0.1F));
+                Collider[] hits = Physics.OverlapBox(neighborGlobalPos, new Vector3(0.1F, 0.1F, 0.1F));
                 if (hits.Length == 0) // Neighbor of destroyed block doesn't already exist
                 {
-                    // Find chunk
-                    ChunkData neighborChunkData = selectedBlockChunkData; // Have to initialize this to something because C# is fucking retarded
-                    int neighborChunkX = Mathf.FloorToInt(neighborPos.x / GameData.CHUNK_SIZE);
-                    int neighborChunkZ = Mathf.FloorToInt(neighborPos.z / GameData.CHUNK_SIZE);
-                    foreach (GameObject chunk in GameObject.FindGameObjectsWithTag("Chunk"))
-                    {
-                        ChunkData chunkData = chunk.GetComponent<ChunkData>();
-                        if (chunkData.globalPosX == neighborChunkX && chunkData.globalPosZ == neighborChunkZ)
-                        {
-                            neighborChunkData = chunkData;
-                            break;
-                        }
-                    }
-
-                    // SpawnBlock(BlockID block, GameObject parentChunk, Vector3 localBlockPosition, Vector3 globalChunkPosition)
-                    // Get local position to index into chunk
-                    Vector3 neighborLocalPos = ChunkHelpers.GetLocalBlockPos(neighborPos);
-
-                    // Spawn block
+                    int neighborChunkX = Mathf.FloorToInt(neighborGlobalPos.x / GameData.CHUNK_SIZE);
+                    int neighborChunkZ = Mathf.FloorToInt(neighborGlobalPos.z / GameData.CHUNK_SIZE);
+                    ChunkData neighborChunkData = chunkParent.transform.Find($"Chunk ({neighborChunkX},{neighborChunkZ})").GetComponent<ChunkData>();
+                    Vector3 neighborLocalPos = ChunkHelpers.GetLocalBlockPos(neighborGlobalPos);
                     BlockID neighborBlock = neighborChunkData.blocks[(int)neighborLocalPos.x, (int)neighborLocalPos.y, (int)neighborLocalPos.z];
                     if (neighborBlock != BlockID.air)
-                        SpawnBlock(neighborBlock, neighborChunkData.gameObject, neighborLocalPos, new Vector3(neighborChunkData.globalPosX, 0, neighborChunkData.globalPosZ));
+                        SpawnBlock(neighborBlock, neighborChunkData.gameObject, neighborLocalPos, new Vector3(neighborChunkX, 0, neighborChunkZ));
                 }
             }
 
@@ -237,18 +417,21 @@ public class ChunkManager : MonoBehaviour
                             light.type = LightType.Point;
                         }
 
-                        // Set parent
+                        // Update parent chunk
                         (int blockChunkX, int blockChunkZ) = ChunkHelpers.GetChunkCoordsByBlockPos(blockObj.transform.position);
-                        foreach (GameObject chunk in GameObject.FindGameObjectsWithTag("Chunk"))
-                        {
-                            ChunkData chunkData = chunk.GetComponent<ChunkData>();
-                            if (chunkData.globalPosX == blockChunkX && chunkData.globalPosZ == blockChunkZ)
-                            {
-                                blockObj.transform.parent = chunk.transform;
-                                chunkData.blocks[blockData.localPosX, blockData.localPosY, blockData.localPosZ] = selectedBlockID;
-                                break;
-                            }
-                        }
+                        GameObject parentChunk = chunkParent.transform.Find($"Chunk ({blockChunkX},{blockChunkZ})").gameObject;
+                        blockObj.transform.parent = parentChunk.transform;
+                        parentChunk.GetComponent<ChunkData>().blocks[blockData.localPosX, blockData.localPosY, blockData.localPosZ] = selectedBlockID;
+                        // foreach (GameObject chunk in GameObject.FindGameObjectsWithTag("Chunk"))
+                        // {
+                        //     ChunkData chunkData = chunk.GetComponent<ChunkData>();
+                        //     if (chunkData.globalPosX == blockChunkX && chunkData.globalPosZ == blockChunkZ)
+                        //     {
+                        //         blockObj.transform.parent = chunk.transform;
+                        //         chunkData.blocks[blockData.localPosX, blockData.localPosY, blockData.localPosZ] = selectedBlockID;
+                        //         break;
+                        //     }
+                        // }
 
                         player.DecrementSelectedItem();
                     }
@@ -293,6 +476,12 @@ public class ChunkManager : MonoBehaviour
             //UnloadDistantChunks(currentRowRenderTask.direction, newPlayerChunkX, newPlayerChunkZ);
             StartCoroutine(RenderNewRow());
         }
+    }
+
+    public void BrownMobExplode(Vector3 globalPos)
+    {
+        brownMobExploded = true;
+        brownMobExplodePos = globalPos;
     }
 
     // Created a new function for this because RenderNewRow() isn't well-suited

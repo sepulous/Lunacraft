@@ -112,6 +112,10 @@ Shader "Custom/OpaqueShader"
 
             half4 frag(Varyings input) : SV_Target0
             {
+                half4 halfFogColor = half4(unity_FogColor.rgb, 1);
+                float viewDistance = length(_WorldSpaceCameraPos - input.positionWS) - 50;
+                float fogFactor = saturate(exp(-0.08 * viewDistance));
+
                 // The Forward+ light loop (LIGHT_LOOP_BEGIN) requires the InputData struct to be in its scope.
                 InputData inputData = (InputData)0;
                 inputData.positionWS = input.positionWS;
@@ -122,9 +126,6 @@ Shader "Custom/OpaqueShader"
                 float3 textureColor = SAMPLE_TEXTURE2D(_BaseTexture, sampler_BaseTexture, input.uv).rgb;
                 float3 lighting = MyLightLoop(textureColor, inputData);
 
-                float viewDistance = length(_WorldSpaceCameraPos - input.positionWS) - 50;
-                float fogFactor = saturate(exp(-0.08 * viewDistance));
-                half4 halfFogColor = half4(unity_FogColor.rgb, 1);
                 half4 halfLighting = half4(lighting.rgb, 1);
                 return lerp(halfFogColor + (1 - unity_FogColor.a)*(halfLighting - halfFogColor), halfLighting, fogFactor);
             }
