@@ -50,6 +50,10 @@ public class ChunkManager : MonoBehaviour
     private bool brownMobExploded = false;
     private Vector3 brownMobExplodePos = Vector3.zero;
 
+    public GameObject brownMobPrefab;
+    public GameObject greenMobPrefab;
+    public GameObject spaceGiraffePrefab;
+
     /*
 
     Periodically check whether any chunks that should have loaded are loaded, and create/load them if not
@@ -71,7 +75,8 @@ public class ChunkManager : MonoBehaviour
         rowRenderTasks = new Queue<RowRenderTask>();
 
         options = OptionsManager.GetCurrentOptions();
-        renderDistance = options.renderDistance;
+        //renderDistance = options.renderDistance;
+        renderDistance = 1;
         
         player = GameObject.Find("Player").GetComponent<Player>();
         camera = GameObject.Find("PlayerCamera");
@@ -122,7 +127,12 @@ public class ChunkManager : MonoBehaviour
         // }
         // renderDistance = newRenderDistance;
 
-        renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
+
+
+        //renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
+        renderDistance = 1;
+
+
 
         /*
 
@@ -641,6 +651,49 @@ public class ChunkManager : MonoBehaviour
                 }
             }
 
+            // Spawn mobs
+            for (int chunkZ = playerChunkZ - renderDistance; chunkZ <= playerChunkZ + renderDistance; chunkZ++)
+            {
+                Transform chunkTransform = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})");
+                MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
+                if (mobs != null)
+                {
+                    foreach (MobData mobData in mobs)
+                    {
+                        if (mobData == null)
+                        {
+                            Debug.Log("NULL MOB DATA");
+                            continue;
+                        }
+
+                        Vector3 mobPosition = new Vector3(
+                            mobData.positionX,
+                            mobData.positionY,
+                            mobData.positionZ
+                        );
+                        Quaternion mobRotation = Quaternion.Euler(
+                            0,
+                            mobData.rotationY,
+                            0
+                        );
+
+                        if (mobData.mobID == 0) // Green mob
+                        {
+                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                        else if (mobData.mobID == 1) // Brown mob
+                        {
+                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunkTransform);
+                            mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
+                        }
+                        else if (mobData.mobID == 2) // Space giraffe
+                        {
+                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                    }
+                }
+            }
+
             // int globalChunkX = currentRowRenderTask.globalCenterCoordX;
             // int globalCenterCoordZ = currentRowRenderTask.globalCenterCoordZ;
 
@@ -778,6 +831,49 @@ public class ChunkManager : MonoBehaviour
                         }
                     }
                     yield return null;
+                }
+            }
+
+            // Spawn mobs
+            for (int chunkX = playerChunkX - renderDistance; chunkX <= playerChunkX + renderDistance; chunkX++)
+            {
+                Transform chunkTransform = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})");
+                MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
+                if (mobs != null)
+                {
+                    foreach (MobData mobData in mobs)
+                    {
+                        if (mobData == null)
+                        {
+                            Debug.Log("NULL MOB DATA");
+                            continue;
+                        }
+
+                        Vector3 mobPosition = new Vector3(
+                            mobData.positionX,
+                            mobData.positionY,
+                            mobData.positionZ
+                        );
+                        Quaternion mobRotation = Quaternion.Euler(
+                            0,
+                            mobData.rotationY,
+                            0
+                        );
+
+                        if (mobData.mobID == 0) // Green mob
+                        {
+                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                        else if (mobData.mobID == 1) // Brown mob
+                        {
+                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunkTransform);
+                            mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
+                        }
+                        else if (mobData.mobID == 2) // Space giraffe
+                        {
+                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                    }
                 }
             }
 

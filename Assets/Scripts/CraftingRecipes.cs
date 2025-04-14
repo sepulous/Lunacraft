@@ -148,11 +148,11 @@ class CraftingRecipes
             (ItemID.amethyst_ore, 8), (ItemID.mechanism, 1),    (ItemID.amethyst_ore, 8),
             (ItemID.none, 0),         (ItemID.amethyst_ore, 8), (ItemID.none, 0)
         },
-        new List<(ItemID, int)>
-        {
-            (ItemID.minilight, 4),
-            (ItemID.light, 1), (ItemID.adhesive, 1)
-        },
+        // new List<(ItemID, int)>
+        // {
+        //     (ItemID.minilight, 4),
+        //     (ItemID.light, 1), (ItemID.adhesive, 1)
+        // },
         new List<(ItemID, int)>
         {
             (ItemID.granite, 1),

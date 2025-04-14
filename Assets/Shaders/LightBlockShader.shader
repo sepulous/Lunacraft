@@ -63,8 +63,8 @@ Shader "Custom/LightBlockShader"
             {
                 float4 textureColor = SAMPLE_TEXTURE2D(_BaseTexture, sampler_BaseTexture, input.uv);
 
-                float viewDistance = length(_WorldSpaceCameraPos - input.positionWS) - 50;
-                float fogFactor = saturate(exp(-0.08 * viewDistance));
+                float viewDistance = length(_WorldSpaceCameraPos - input.positionWS) - 20;
+                float fogFactor = saturate(exp(-0.12 * viewDistance));
                 half4 halfFogColor = half4(unity_FogColor.rgb, 1);
                 half4 halfTextureColor = half4(textureColor);
                 //return lerp(half4(unity_FogColor.rgb, 1), half4(textureColor), fogFactor);

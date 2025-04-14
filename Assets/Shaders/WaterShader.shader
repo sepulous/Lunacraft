@@ -68,8 +68,8 @@ Shader "Custom/WaterShader"
                 Light mainLight = GetMainLight();
                 float correctedIntensity = saturate(length(mainLight.color) + 0.2) * mainLight.shadowAttenuation;
 
-                float viewDistance = length(_WorldSpaceCameraPos - v.positionWS) - 50;
-                float fogFactor = saturate(exp(-0.08 * viewDistance));
+                float viewDistance = length(_WorldSpaceCameraPos - v.positionWS) - 20; // original: 50
+                float fogFactor = saturate(exp(-0.12 * viewDistance)); // original: -0.08
                 half4 halfFogColor = half4(unity_FogColor.rgb, 1);
                 half4 halfWaterColor = half4(_Color.rgb * correctedIntensity, _Color.a);
                 //return lerp(half4(unity_FogColor.rgb, 1), half4(_Color.rgb * correctedIntensity, _Color.a), fogFactor);

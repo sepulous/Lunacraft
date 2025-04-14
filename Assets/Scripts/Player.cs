@@ -24,6 +24,8 @@ public struct PlayerData
 
 public class Player : MonoBehaviour
 {
+    public GameObject invTip;
+
     private int health = 100;
     private int suitStatus = 100;
     private float lastHealthUpdate = 0;
@@ -197,6 +199,8 @@ public class Player : MonoBehaviour
             
             using (FileStream fileStream = new FileStream(playerDataPath, FileMode.Create, FileAccess.Write))
                 (new BinaryFormatter()).Serialize(fileStream, playerData);
+
+            invTip.SetActive(true);
         }
         else
         {
@@ -448,6 +452,8 @@ public class Player : MonoBehaviour
             // Toggle inventory
             if (Input.GetKeyDown(KeyCode.E) && !pauseMenu.IsPaused())
             {
+                invTip.SetActive(false);
+
                 if (inventoryUI.activeSelf)
                 {
                     Cursor.lockState = CursorLockMode.Locked;
@@ -593,8 +599,8 @@ public class Player : MonoBehaviour
                     InventorySlot hoveredSlot = null;
                     bool hoveringOnAssemblerOutput = false;
                     bool holdingStack = heldItemAmount > 0 && heldItemID != ItemID.none;
-                    float mousePosRatioX = Input.mousePosition.x / 2560F;
-                    float mousePosRatioY = Input.mousePosition.y / 1440F;
+                    float mousePosRatioX = (Input.mousePosition.x * (Screen.safeArea.width / 2560F)) / 2560F;
+                    float mousePosRatioY = (Input.mousePosition.y * (Screen.safeArea.height / 1400F)) / 1440F;
 
                     // Check inventory slots
                     for (int i = 0; i < 5; i++)

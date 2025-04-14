@@ -86,11 +86,12 @@ IDEA: What if I have a coroutine for each chunk, instead of one coroutine for al
 
 
 WebGL Build:
-    [ ] Fix render distance to 1
-    [ ] Force fog on and remove option (and bring it closer to hide low render distance)
+    [X] Fix render distance to 1
+    [X] Force fog on and remove option (and bring it closer to hide low render distance)
     [X] Remove top right main menu text
     [X] Remove minilights
-    [ ] Add "'E' to open inventory" message when moon is first loaded
+    [X] Add "'E' to open inventory" message when moon is first loaded
+    [X] Change pause menu key to tab
 
     These are all super quick
 

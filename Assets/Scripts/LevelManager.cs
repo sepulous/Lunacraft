@@ -120,7 +120,8 @@ public class LevelManager : MonoBehaviour
 
     private IEnumerator _GenerateMoon(int moon, MoonData moonData)
     {
-        int renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
+        //int renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
+        int renderDistance = 1;
         totalProgressCount = GameData.CHUNK_SIZE*(2*renderDistance + 1)*(2*renderDistance + 1);
         loadingState = LoadingState.GENERATING;
 
