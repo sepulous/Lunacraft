@@ -13,7 +13,7 @@ public class MoonData
 {
     public int moon;
     public ulong seed;
-    public long distanceTraveled;
+    public float distanceTraveled;
     public long worldTime;
     public bool isCreative;
     public int treeCover;

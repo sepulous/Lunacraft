@@ -27,8 +27,8 @@ class BrownMob : MonoBehaviour
     void Awake()
     {
         collider = gameObject.AddComponent<BoxCollider>();
-        collider.material.staticFriction = 0;
-        collider.material.dynamicFriction = 0;
+        // collider.material.staticFriction = 0;
+        // collider.material.dynamicFriction = 0;
         rigidbody = gameObject.AddComponent<Rigidbody>();
         rigidbody.mass = 0.5F;
         rigidbody.angularDamping = 0;

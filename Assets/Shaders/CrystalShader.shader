@@ -72,8 +72,8 @@ Shader "Custom/CrystalShader"
                 //return half4(textureColor.rgb * correctedIntensity, textureColor.a);
                 //return lerp(half4(0.3, 0, 1, 1), half4(textureColor.rgb * correctedIntensity, textureColor.a), i.fogFactor); // Apply fog
 
-                float viewDistance = length(_WorldSpaceCameraPos - i.positionWS) - 20;
-                float fogFactor = saturate(exp(-0.12 * viewDistance));
+                float viewDistance = length(_WorldSpaceCameraPos - i.positionWS) - 40;
+                float fogFactor = saturate(exp(-0.08 * viewDistance));
                 half4 halfFogColor = half4(unity_FogColor.rgb, 1);
                 half4 halfTextureColor = half4(textureColor.rgb * correctedIntensity, textureColor.a);
                 //return lerp(half4(unity_FogColor.rgb, 1), half4(textureColor.rgb * correctedIntensity, textureColor.a), fogFactor);

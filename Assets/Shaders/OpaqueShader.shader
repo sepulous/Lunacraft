@@ -103,6 +103,8 @@ Shader "Custom/OpaqueShader"
                     float3 lightPos = _AdditionalLightsPosition[lightIndex];
                     float3 displacement = inputData.positionWS - lightPos;
                     lighting += LightBlockLighting(displacement, additionalLight);
+                    if (any(lighting + 0.05 >= 1.5))
+                        break;
                 LIGHT_LOOP_END
 
                 #endif
@@ -113,8 +115,8 @@ Shader "Custom/OpaqueShader"
             half4 frag(Varyings input) : SV_Target0
             {
                 half4 halfFogColor = half4(unity_FogColor.rgb, 1);
-                float viewDistance = length(_WorldSpaceCameraPos - input.positionWS) - 20;
-                float fogFactor = saturate(exp(-0.12 * viewDistance));
+                float viewDistance = length(_WorldSpaceCameraPos - input.positionWS) - 40;
+                float fogFactor = saturate(exp(-0.08 * viewDistance));
 
                 // The Forward+ light loop (LIGHT_LOOP_BEGIN) requires the InputData struct to be in its scope.
                 InputData inputData = (InputData)0;

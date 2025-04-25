@@ -40,9 +40,7 @@ public class Player : MonoBehaviour
     public GameObject deathMenu;
     public Image healthImage;
     public Image suitStatusImage;
-
     private float flySpeed = 0.8F;
-
     public Material[] selectionCubeMaterials;
     private GameObject selectionCube;
     private RaycastHit selectionInfo;
@@ -52,6 +50,7 @@ public class Player : MonoBehaviour
     private string playerDataPath;
     private Mesh blockMesh;
     private List<Material> blockMaterials;
+    public float distanceTraveledThisSession = 0;
 
     // Inventory
     private GameObject heldStack;
@@ -200,7 +199,7 @@ public class Player : MonoBehaviour
             using (FileStream fileStream = new FileStream(playerDataPath, FileMode.Create, FileAccess.Write))
                 (new BinaryFormatter()).Serialize(fileStream, playerData);
 
-            invTip.SetActive(true);
+            //invTip.SetActive(true);
         }
         else
         {
@@ -297,14 +296,26 @@ public class Player : MonoBehaviour
             bool lookingAtBlock = Physics.Raycast(camera.transform.position, camera.transform.forward, out selectionInfo, maxSelectionDistance, LayerMask.GetMask("Block"));
             if (lookingAtBlock)
             {
-                selectionCube.SetActive(true);
-
                 if (selectionCube.transform.position != selectionInfo.collider.gameObject.transform.position)
                 {
-                    selectionCube.transform.position = selectionInfo.collider.gameObject.transform.position;
                     blockMineTime = 0;
                     selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
                 }
+
+                BlockData selectedBlockData = selectionInfo.collider.gameObject.GetComponent<BlockData>();
+                string selectedBlockIDName = selectedBlockData.blockID.ToString();
+                if (selectedBlockIDName.StartsWith("minilight"))
+                {
+                    selectionCube.transform.localScale = 1.005F * (new Vector3(0.3F, 0.3F, 0.02F));
+                }
+                else
+                {
+                    selectionCube.transform.localScale = new Vector3(1.005F, 1.005F, 1.005F);
+                }
+                selectionCube.transform.position = selectionInfo.collider.gameObject.transform.position;
+                selectionCube.transform.localRotation = selectionInfo.collider.gameObject.transform.rotation;
+
+                selectionCube.SetActive(true);
             }
             else
             {
@@ -315,7 +326,7 @@ public class Player : MonoBehaviour
             if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf && selectionCube.activeSelf)
             {
                 ItemID selected = inventorySystem.inventory.slots[0][inventorySystem.selectedHotbarSlot - 1].itemID;
-                placedBlock = Input.GetMouseButtonDown(1) && Enum.TryParse(selected.ToString(), out BlockID _);
+                placedBlock = Input.GetMouseButtonDown(1) && (Enum.TryParse(selected.ToString(), out BlockID _) || selected.ToString().StartsWith("minilight"));
                 if (placedBlock)
                 {
                     handObj.GetComponent<Animator>().SetTrigger("PlacedBlock");
@@ -452,7 +463,7 @@ public class Player : MonoBehaviour
             // Toggle inventory
             if (Input.GetKeyDown(KeyCode.E) && !pauseMenu.IsPaused())
             {
-                invTip.SetActive(false);
+                //invTip.SetActive(false);
 
                 if (inventoryUI.activeSelf)
                 {
@@ -599,8 +610,8 @@ public class Player : MonoBehaviour
                     InventorySlot hoveredSlot = null;
                     bool hoveringOnAssemblerOutput = false;
                     bool holdingStack = heldItemAmount > 0 && heldItemID != ItemID.none;
-                    float mousePosRatioX = (Input.mousePosition.x * (Screen.safeArea.width / 2560F)) / 2560F;
-                    float mousePosRatioY = (Input.mousePosition.y * (Screen.safeArea.height / 1400F)) / 1440F;
+                    float mousePosRatioX = Input.mousePosition.x / 2560F;
+                    float mousePosRatioY = Input.mousePosition.y / 1440F;
 
                     // Check inventory slots
                     for (int i = 0; i < 5; i++)
@@ -685,9 +696,13 @@ public class Player : MonoBehaviour
                                         {
                                             foreach (var recipeItem in recipeMatch)
                                             {
-                                                if (recipeItem.Item1 == inputSlot.itemID)
+                                                ItemID recipeItemID = recipeItem.Item1;
+                                                int recipeItemAmount = recipeItem.Item2;
+                                                if (recipeItemID == inputSlot.itemID)
                                                 {
-                                                    inputSlot.amount -= recipeItem.Item2;
+                                                    inputSlot.amount -= recipeItemAmount;
+                                                    if (inputSlot.amount == 0)
+                                                        inputSlot.itemID = ItemID.none;
                                                     break;
                                                 }
                                             }
@@ -1162,6 +1177,7 @@ public class Player : MonoBehaviour
 
     public void SavePlayerData()
     {
+        // Update player data
         PlayerData playerData = new PlayerData();
         playerData.positionX = transform.position.x;
         playerData.positionY = transform.position.y;
@@ -1173,6 +1189,16 @@ public class Player : MonoBehaviour
         playerData.suitStatus = suitStatus;
         using (FileStream fileStream = new FileStream(playerDataPath, FileMode.Create, FileAccess.Write))
             (new BinaryFormatter()).Serialize(fileStream, playerData);
+
+        // Update distance traveled
+        int moon = PlayerPrefs.GetInt("moon");
+        string moonDataFile = string.Format("{0}/moons/moon{1}/moon.dat", Application.persistentDataPath, moon);
+        MoonData moonData = new MoonData();
+        using (FileStream file = File.Open(moonDataFile, FileMode.Open, FileAccess.Read))
+            moonData = (MoonData)(new BinaryFormatter()).Deserialize(file);
+        moonData.distanceTraveled += distanceTraveledThisSession;
+        using (FileStream file = File.Open(moonDataFile, FileMode.Create, FileAccess.Write))
+            (new BinaryFormatter()).Serialize(file, moonData);
     }
 
     public (int, int) GetChunkCoords()

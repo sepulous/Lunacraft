@@ -5,7 +5,17 @@ using UnityEngine;
 
 public class ChunkHelpers
 {
+    private static int[][,] HEIGHT_MAPS = new int[4][,] {
+        new int[GameData.CHUNK_SIZE, GameData.CHUNK_SIZE],
+        new int[GameData.CHUNK_SIZE, GameData.CHUNK_SIZE],
+        new int[GameData.CHUNK_SIZE, GameData.CHUNK_SIZE],
+        new int[GameData.CHUNK_SIZE, GameData.CHUNK_SIZE]
+    };
     private static readonly int STRUCTURE_PADDING = 3; // How many blocks into the chunk structures can be spawned (keeping structures completely inside a chunk is simplest)
+    // topBlock == BlockID.air || topBlock == BlockID.water || topBlock == BlockID.sulphur_crystal || topBlock == BlockID.boron_crystal || topBlock == BlockID.blue_crystal || topBlock == BlockID.glass
+    private static readonly List<BlockID> NON_OPAQUE_BLOCKS = new List<BlockID> {
+        BlockID.air, BlockID.water, BlockID.sulphur_crystal, BlockID.boron_crystal, BlockID.blue_crystal, BlockID.glass, BlockID.minilight_px, BlockID.minilight_nx, BlockID.minilight_pz, BlockID.minilight_nz
+    };
     private static readonly (int, int, int)[][] CRYSTAL_PLANT_SHAPES = {
         new (int, int, int)[]
         {
@@ -143,6 +153,7 @@ public class ChunkHelpers
             (BlockID.moon_leaf, 0, 6, -6), (BlockID.moon_leaf, 1, 6, -6), (BlockID.moon_leaf, 1, 7, -6), (BlockID.moon_leaf, 1, 7, -7),
             (BlockID.moon_leaf, 0, 7, -7), (BlockID.moon_leaf, 1, 8, -7), (BlockID.moon_leaf, 1, 8, -9), (BlockID.moon_leaf, 1, 7, -9),
             (BlockID.moon_leaf, 1, 7, -10), (BlockID.moon_leaf, 0, 7, -9), (BlockID.moon_leaf, 0, 7, -10), (BlockID.moon_leaf, -1, 7, -10),
+            (BlockID.moon_leaf, 0, 7, -8), (BlockID.moon_leaf, 1, 7, -8), (BlockID.moon_leaf, 1, 8, -8),
 
             (BlockID.light, 0, 5, -11), (BlockID.light, 0, 6, -11), (BlockID.light, 0, 5, -10), (BlockID.light, 0, 6, -10),
             (BlockID.light, -1, 5, -11), (BlockID.light, -1, 6, -11), (BlockID.light, -1, 6, -10), (BlockID.light, -5, 5, 3),
@@ -1023,10 +1034,10 @@ public class ChunkHelpers
         // Generate terrain
         //
         float rockHeightFrequency = 0.3F + 0.05F*moonData.terrainRoughness;
-        int[,] rockHeightMap   = GenerateHeightMap(chunkX, chunkZ, moonData.seed, 16F, 0.4F, rockHeightFrequency, 4);
-        int[,] gravelHeightMap = GenerateHeightMap(chunkX, chunkZ, moonData.seed, 4F, 0.4F, 0.6F, 2);
-        int[,] dirtHeightMap   = GenerateHeightMap(chunkX, chunkZ, moonData.seed, 3F, 0.4F, 0.4F, 3);
-        int[,] sandHeightMap   = GenerateHeightMap(chunkX, chunkZ, moonData.seed, 2F, 0.4F, 0.8F, 2);
+        int[,] rockHeightMap   = GenerateHeightMap(0, chunkX, chunkZ, moonData.seed, 16F, 0.4F, rockHeightFrequency, 4);
+        int[,] gravelHeightMap = GenerateHeightMap(1, chunkX, chunkZ, moonData.seed, 4F, 0.4F, 0.6F, 2);
+        int[,] dirtHeightMap   = GenerateHeightMap(2, chunkX, chunkZ, moonData.seed, 3F, 0.4F, 0.4F, 3);
+        int[,] sandHeightMap   = GenerateHeightMap(3, chunkX, chunkZ, moonData.seed, 2F, 0.4F, 0.8F, 2);
 
         for (int x = 0; x < GameData.CHUNK_SIZE; x++)
         {
@@ -1111,54 +1122,70 @@ public class ChunkHelpers
             }
 
             int ore = UnityEngine.Random.Range(1, 101);
+            int veinSize;
             BlockID oreID;
             if (ore <= 36) // 36%
+            {
                 oreID = BlockID.magnetite;
+                veinSize = UnityEngine.Random.Range(2, 7);
+            }
             else if (ore <= 60) // 24%
+            {
                 oreID = BlockID.aluminum_ore;
+                veinSize = UnityEngine.Random.Range(2, 7);
+            }
             else if (ore <= 78) // 18%
+            {
                 oreID = BlockID.titanium_ore;
+                veinSize = UnityEngine.Random.Range(2, 7);
+            }
             else if (ore <= 91) // 13%
+            {
                 oreID = BlockID.gold_ore;
+                veinSize = UnityEngine.Random.Range(1, 5);
+            }
             else if (ore <= 98) // 7%
+            {
                 oreID = BlockID.notchium_ore;
+                veinSize = UnityEngine.Random.Range(1, 5);
+            }
             else // 2%
+            {
                 oreID = BlockID.blue_crystal;
+                veinSize = UnityEngine.Random.Range(1, 5);
+            }
 
-            int veinSize;
-            if (oreID == BlockID.magnetite || oreID == BlockID.aluminum_ore || oreID == BlockID.titanium_ore)
-                veinSize = UnityEngine.Random.Range(2, 7); // 2-6 magnetite/aluminum/titanium
-            else
-                veinSize = UnityEngine.Random.Range(1, 5); // 1-4 notchium/gold ore
-            Vector3 currentBlock = new Vector3(seedBlockX, seedBlockY, seedBlockZ);
+            int currentBlockX = seedBlockX;
+            int currentBlockY = seedBlockY;
+            int currentBlockZ = seedBlockZ;
             chunk[seedBlockX, seedBlockY, seedBlockZ] = oreID;
             for (int count = 0; count < veinSize; count++)
             {
                 int nextDirection = UnityEngine.Random.Range(1, 6);
                 if (nextDirection == 1) // Forward
                 {
-                    currentBlock += new Vector3(0, 0, 1);
+                    currentBlockZ++;
                 }
                 else if (nextDirection == 2) // Backward
                 {
-                    currentBlock += new Vector3(0, 0, -1);
+                    currentBlockZ--;
                 }
                 else if (nextDirection == 3) // Right
                 {
-                    currentBlock += new Vector3(1, 0, 0);
+                    currentBlockX++;
                 }
                 else if (nextDirection == 4) // Left
                 {
-                    currentBlock += new Vector3(-1, 0, 0);
+                    currentBlockX--;
                 }
                 else // Down
                 {
-                    currentBlock += new Vector3(0, -1, 0);
+                    currentBlockY--;
                 }
 
-                BlockID currentBlockID = chunk[(int)currentBlock.x, (int)currentBlock.y, (int)currentBlock.z];
+                BlockID currentBlockID = chunk[currentBlockX, currentBlockY, currentBlockZ];
                 if (currentBlockID != BlockID.air)
-                    chunk[(int)currentBlock.x, (int)currentBlock.y, (int)currentBlock.z] = oreID;
+                    chunk[currentBlockX, currentBlockY, currentBlockZ] = oreID;
             }
         }
 
@@ -1167,7 +1194,7 @@ public class ChunkHelpers
         //
         int spawnAstronautLair = UnityEngine.Random.Range(0, 100); // 1% chance, each chunk
         const int lairDepth = 26;
-        if (spawnAstronautLair == 0)
+        if (spawnAstronautLair == 69)
         {
             int centerBlockX = (int)(GameData.CHUNK_SIZE / 2);
             int centerBlockZ = (int)(GameData.CHUNK_SIZE / 2);
@@ -1192,8 +1219,6 @@ public class ChunkHelpers
                     }
                 }
             }
-
-            // TODO: Rethink the code below. It's symmetric, so let's do away with redundant logic.
 
             // Decorate with polymer and light
             bool leftSideDone = false;
@@ -1273,30 +1298,28 @@ public class ChunkHelpers
             int paddingNeeded = shapeOffsets[0].Item1;
             int baseBlockX = UnityEngine.Random.Range(paddingNeeded, GameData.CHUNK_SIZE - paddingNeeded);
             int baseBlockZ = UnityEngine.Random.Range(paddingNeeded, GameData.CHUNK_SIZE - paddingNeeded);
-            int baseBlockY = -1;
+            int baseBlockY;
             for (int y = 63; y < GameData.WORLD_HEIGHT_LIMIT; y++)
             {
                 if (chunk[baseBlockX, y+1, baseBlockZ] == BlockID.air)
                 {
                     if (chunk[baseBlockX, y, baseBlockZ] == BlockID.topsoil || chunk[baseBlockX, y, baseBlockZ] == BlockID.sand)
+                    {
                         baseBlockY = y;
+                        for (int i = 1; i < shapeOffsets.Length; i++)
+                        {
+                            (int offsetX, int offsetY, int offsetZ) = shapeOffsets[i];
+                            if (crystalPlantOrientation == 2) // 90 degrees
+                                (offsetX, offsetZ) = (-offsetZ, offsetX);
+                            else if (crystalPlantOrientation == 3) // 180 degrees
+                                (offsetX, offsetZ) = (-offsetX, -offsetZ);
+                            else if (crystalPlantOrientation == 4) // 270 degrees
+                                (offsetX, offsetZ) = (offsetZ, -offsetX);
+
+                            chunk[baseBlockX + offsetX, baseBlockY + offsetY, baseBlockZ + offsetZ] = crystal;
+                        }
+                    }
                     break;
-                }
-            }
-
-            if (baseBlockY != -1)
-            {
-                for (int i = 1; i < shapeOffsets.Length; i++)
-                {
-                    (int offsetX, int offsetY, int offsetZ) = shapeOffsets[i];
-                    if (crystalPlantOrientation == 2) // 90 degrees
-                        (offsetX, offsetZ) = (-offsetZ, offsetX);
-                    else if (crystalPlantOrientation == 3) // 180 degrees
-                        (offsetX, offsetZ) = (-offsetX, -offsetZ);
-                    else if (crystalPlantOrientation == 4) // 270 degrees
-                        (offsetX, offsetZ) = (offsetZ, -offsetX);
-
-                    chunk[baseBlockX + offsetX, baseBlockY + offsetY, baseBlockZ + offsetZ] = crystal;
                 }
             }
         }
@@ -1332,35 +1355,29 @@ public class ChunkHelpers
             int paddingNeeded = treeData[0].Item2;
             int baseBlockX = UnityEngine.Random.Range(paddingNeeded, GameData.CHUNK_SIZE - paddingNeeded);
             int baseBlockZ = UnityEngine.Random.Range(paddingNeeded, GameData.CHUNK_SIZE - paddingNeeded);
-            int baseBlockY = -1;
+            int baseBlockY;
             for (int y = 63; y < GameData.WORLD_HEIGHT_LIMIT; y++)
             {
                 if (chunk[baseBlockX, y+1, baseBlockZ] == BlockID.air)
                 {
                     if (chunk[baseBlockX, y, baseBlockZ] == BlockID.topsoil || chunk[baseBlockX, y, baseBlockZ] == BlockID.sand)
+                    {
                         baseBlockY = y;
+                        //chunk[baseBlockX, baseBlockY, baseBlockZ] = BlockID.notchium;
+                        for (int j = 1; j < treeData.Length; j++)
+                        {
+                            (BlockID treeBlock, int offsetX, int offsetY, int offsetZ) = treeData[j];
+                            if (treeOrientation == 2) // 90 degrees
+                                (offsetX, offsetZ) = (-offsetZ, offsetX);
+                            else if (treeOrientation == 3) // 180 degrees
+                                (offsetX, offsetZ) = (-offsetX, -offsetZ);
+                            else if (treeOrientation == 4) // 270 degrees
+                                (offsetX, offsetZ) = (offsetZ, -offsetX);
+                            
+                            chunk[baseBlockX + offsetX, baseBlockY + offsetY, baseBlockZ + offsetZ] = treeBlock;
+                        }
+                    }
                     break;
-                }
-            }
-            
-            if (baseBlockY != -1)
-            {
-                for (int j = 1; j < treeData.Length; j++)
-                {
-                    (BlockID treeBlock, int offsetX, int offsetY, int offsetZ) = treeData[j];
-                    if (treeOrientation == 2) // 90 degrees
-                        (offsetX, offsetZ) = (-offsetZ, offsetX);
-                    else if (treeOrientation == 3) // 180 degrees
-                        (offsetX, offsetZ) = (-offsetX, -offsetZ);
-                    else if (treeOrientation == 4) // 270 degrees
-                        (offsetX, offsetZ) = (offsetZ, -offsetX);
-
-                    int treeBlockX = baseBlockX + offsetX;
-                    int treeBlockY = baseBlockY + offsetY;
-                    int treeBlockZ = baseBlockZ + offsetZ;
-                    
-                    if (!(offsetY == 1 && chunk[treeBlockX, treeBlockY - 1, treeBlockZ] == BlockID.air))
-                        chunk[treeBlockX, treeBlockY, treeBlockZ] = treeBlock;
                 }
             }
         }
@@ -1368,111 +1385,111 @@ public class ChunkHelpers
         //
         // Mobs
         //
-        // TODO: Solitary giraffes are too common. They should generally spawn in herds of 3-5.
-        if (moonData.wildlifeLevel > 0)
-        {
-            int mobSpawnChance = UnityEngine.Random.Range(0, 10 - 2*moonData.wildlifeLevel);
-            if (mobSpawnChance == 0)
-            {
-                int mobCount = UnityEngine.Random.Range(1, moonData.wildlifeLevel + 1);
-                MobData[] mobs = new MobData[mobCount];
-                for (int i = 0; i < mobCount; i++)
-                {
-                    int mobType = UnityEngine.Random.Range(0, 10);
-                    if (mobType <= 3)
-                        mobType = 0;
-                    else if (mobType <= 7)
-                        mobType = 1;
-                    else
-                        mobType = 2;
+        // if (moonData.wildlifeLevel > 0)
+        // {
+        //     int mobSpawnChance = UnityEngine.Random.Range(0, 10 - 2*moonData.wildlifeLevel);
+        //     if (mobSpawnChance == 0)
+        //     {
+        //         int mobCount = UnityEngine.Random.Range(1, moonData.wildlifeLevel + 1);
+        //         MobData[] mobs = new MobData[mobCount];
+        //         for (int i = 0; i < mobCount; i++)
+        //         {
+        //             int mobType = UnityEngine.Random.Range(0, 10);
+        //             if (mobType <= 3)
+        //                 mobType = 0;
+        //             else if (mobType <= 7)
+        //                 mobType = 1;
+        //             else
+        //                 mobType = 2;
 
-                    // if (mobType == 0 || mobType == 1 || mobType == 2) // Green/brown mobs (green ~ 0, brown ~ 1)
-                    // {
-                        int localPosX = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
-                        int localPosZ = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
-                        int localPosY = 0;
-                        for (int j = 63; j < GameData.WORLD_HEIGHT_LIMIT; j++)
-                        {
-                            if (chunk[localPosX, j, localPosZ] == BlockID.air)
-                            {
-                                localPosY = j;
-                                break;
-                            }
-                        }
+        //             // if (mobType == 0 || mobType == 1 || mobType == 2) // Green/brown mobs (green ~ 0, brown ~ 1)
+        //             // {
+        //                 int localPosX = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
+        //                 int localPosZ = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
+        //                 int localPosY = 0;
+        //                 for (int j = 63; j < GameData.WORLD_HEIGHT_LIMIT; j++)
+        //                 {
+        //                     if (chunk[localPosX, j, localPosZ] == BlockID.air)
+        //                     {
+        //                         localPosY = j;
+        //                         break;
+        //                     }
+        //                 }
 
-                        Vector3 globalPos = new Vector3(
-                            chunkX*GameData.CHUNK_SIZE + localPosX,
-                            localPosY,
-                            chunkZ*GameData.CHUNK_SIZE + localPosZ
-                        );
+        //                 Vector3 globalPos = new Vector3(
+        //                     chunkX*GameData.CHUNK_SIZE + localPosX,
+        //                     localPosY,
+        //                     chunkZ*GameData.CHUNK_SIZE + localPosZ
+        //                 );
 
-                        MobData mobData = new MobData();
-                        mobData.mobID = mobType;
-                        mobData.positionX = globalPos.x;
-                        mobData.positionY = globalPos.y + ((mobType == 2) ? 2 : 0); // Giraffes need to be shifted up
-                        mobData.positionZ = globalPos.z;
-                        mobData.rotationY = 0;
-                        mobData.aggressive = false;
-                        mobs[i] = mobData;
-                    //}
-                    // else if (mobType == 2) // Giraffe
-                    // {
-                    //     int herdSize = UnityEngine.Random.Range(1, (int)Mathf.Min(5, mobCount - i));
-                    //     int herdCenterX = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
-                    //     int herdCenterZ = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
-                    //     for (int j = 0; j < herdSize; j++)
-                    //     {
-                    //         int giraffePosX = herdCenterX + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterX), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterX));
-                    //         int giraffePosZ = herdCenterZ + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterZ), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterZ));
-                    //         int giraffePosY = 0;
-                    //         for (int k = 63; k < GameData.WORLD_HEIGHT_LIMIT; k++)
-                    //         {
-                    //             if (chunk[giraffePosX, k, giraffePosZ] == BlockID.air)
-                    //             {
-                    //                 giraffePosY = k;
-                    //                 break;
-                    //             }
-                    //         }
+        //                 MobData mobData = new MobData();
+        //                 mobData.mobID = mobType;
+        //                 mobData.positionX = globalPos.x;
+        //                 mobData.positionY = globalPos.y + ((mobType == 2) ? 2 : 0); // Giraffes need to be shifted up
+        //                 mobData.positionZ = globalPos.z;
+        //                 mobData.rotationY = 0;
+        //                 mobData.aggressive = false;
+        //                 mobs[i] = mobData;
+        //             //}
+        //             // else if (mobType == 2) // Giraffe
+        //             // {
+        //             //     int herdSize = UnityEngine.Random.Range(1, (int)Mathf.Min(5, mobCount - i));
+        //             //     int herdCenterX = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
+        //             //     int herdCenterZ = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
+        //             //     for (int j = 0; j < herdSize; j++)
+        //             //     {
+        //             //         int giraffePosX = herdCenterX + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterX), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterX));
+        //             //         int giraffePosZ = herdCenterZ + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterZ), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterZ));
+        //             //         int giraffePosY = 0;
+        //             //         for (int k = 63; k < GameData.WORLD_HEIGHT_LIMIT; k++)
+        //             //         {
+        //             //             if (chunk[giraffePosX, k, giraffePosZ] == BlockID.air)
+        //             //             {
+        //             //                 giraffePosY = k;
+        //             //                 break;
+        //             //             }
+        //             //         }
 
-                    //         Vector3 globalPos = new Vector3(
-                    //             chunkX*GameData.CHUNK_SIZE + giraffePosX,
-                    //             giraffePosY,
-                    //             chunkZ*GameData.CHUNK_SIZE + giraffePosZ
-                    //         );
+        //             //         Vector3 globalPos = new Vector3(
+        //             //             chunkX*GameData.CHUNK_SIZE + giraffePosX,
+        //             //             giraffePosY,
+        //             //             chunkZ*GameData.CHUNK_SIZE + giraffePosZ
+        //             //         );
 
-                    //         MobData mobData = new MobData();
-                    //         mobData.mobID = mobType;
-                    //         mobData.positionX = globalPos.x;
-                    //         mobData.positionY = globalPos.y;
-                    //         mobData.positionZ = globalPos.z;
-                    //         mobData.rotationY = 0;
-                    //         mobData.aggressive = false;
-                    //         mobs[i + j] = mobData;
-                    //     }
-                    //     i += herdSize;
-                    // }
-                }
-                MobHelpers.SaveMobsToChunk(mobs, moonData.moon, chunkX, chunkZ);
-            }
-        }
+        //             //         MobData mobData = new MobData();
+        //             //         mobData.mobID = mobType;
+        //             //         mobData.positionX = globalPos.x;
+        //             //         mobData.positionY = globalPos.y;
+        //             //         mobData.positionZ = globalPos.z;
+        //             //         mobData.rotationY = 0;
+        //             //         mobData.aggressive = false;
+        //             //         mobs[i + j] = mobData;
+        //             //     }
+        //             //     i += herdSize;
+        //             // }
+        //         }
+        //         MobHelpers.SaveMobsToChunk(mobs, moonData.moon, chunkX, chunkZ);
+        //     }
+        // }
 
         UnityEngine.Random.state = initialRandomState; // Reset so we don't interfere with anything else (but maybe every use of Random should be based on the seed?)
     }
 
-    private static int[,] GenerateHeightMap(int chunkX, int chunkZ, ulong seed, float amplitude, float frequency, float persistence, int octaves)
+    private static int[,] GenerateHeightMap(int heightMapIndex, int chunkX, int chunkZ, ulong seed, float amplitude, float frequency, float persistence, int octaves)
     {
-        int[,] heightMap = new int[GameData.CHUNK_SIZE,GameData.CHUNK_SIZE];
+        int[,] heightMap = HEIGHT_MAPS[heightMapIndex];
         float frequency0 = frequency;
         float amplitude0 = amplitude;
         uint xSeed = (uint)((seed & 0b1010101010101010101010101010101010101010101010101010101010101010) >> 48);
         uint zSeed = (uint)((seed & 0b0101010101010101010101010101010101010101010101010101010101010101) >> 48);
+        float heightLimit;
         for (int x = 0; x < GameData.CHUNK_SIZE; x++)
         {
             for (int z = 0; z < GameData.CHUNK_SIZE; z++)
             {
                 frequency = frequency0;
                 amplitude = amplitude0;
-                float heightLimit = 0F;
+                heightLimit = 0F;
                 for (int i = 0; i < octaves; i++)
                 {
                     float xArg = (((x + chunkX*GameData.CHUNK_SIZE) + xSeed) / 32F) * frequency; // TODO: FIGURE OUT WHAT 16F IS (I think it's just to prevent overflows), or grid size
@@ -1487,7 +1504,27 @@ public class ChunkHelpers
         return heightMap;
     }
 
-    public static Vector3 GetLocalBlockPos(Vector3 globalBlockPos)
+    public static (int, int, int) GetLocalBlockPos(int globalBlockPosX, int globalBlockPosY, int globalBlockPosZ)
+    {
+        int chunkX = Mathf.Abs(Mathf.FloorToInt((float)globalBlockPosX / GameData.CHUNK_SIZE));
+        int chunkZ = Mathf.Abs(Mathf.FloorToInt((float)globalBlockPosZ / GameData.CHUNK_SIZE));
+        int localBlockPosX;
+        int localBlockPosZ;
+
+        if (globalBlockPosX >= 0 || ((-globalBlockPosX) % GameData.CHUNK_SIZE == 0))
+            localBlockPosX = globalBlockPosX % GameData.CHUNK_SIZE;
+        else
+            localBlockPosX = globalBlockPosX + chunkX*GameData.CHUNK_SIZE;
+
+        if (globalBlockPosZ >= 0 || ((-globalBlockPosZ) % GameData.CHUNK_SIZE == 0))
+            localBlockPosZ = globalBlockPosZ % GameData.CHUNK_SIZE;
+        else
+            localBlockPosZ = globalBlockPosZ + chunkZ*GameData.CHUNK_SIZE;
+
+        return (localBlockPosX, globalBlockPosY, localBlockPosZ);
+    }
+
+    public static (int, int, int) GetLocalBlockPos(Vector3 globalBlockPos)
     {
         int chunkX = Mathf.Abs(Mathf.FloorToInt(globalBlockPos.x / GameData.CHUNK_SIZE));
         int chunkZ = Mathf.Abs(Mathf.FloorToInt(globalBlockPos.z / GameData.CHUNK_SIZE));
@@ -1506,7 +1543,7 @@ public class ChunkHelpers
         else
             localBlockPosZ = globalBlockPosZ + chunkZ*GameData.CHUNK_SIZE;
 
-        return new Vector3(localBlockPosX, globalBlockPos.y, localBlockPosZ);
+        return (localBlockPosX, (int)globalBlockPos.y, localBlockPosZ);
     }
     
     public static (int, int) GetChunkCoordsByBlockPos(Vector3 globalBlockPos)
@@ -1537,14 +1574,8 @@ public class ChunkHelpers
         return adjacentChunkData;
     }
 
-    public static bool BlockShouldBeRendered(BlockID block, ChunkData[] adjacentChunkData, ChunkData chunkData, Vector3 localBlockPosition)
+    public static bool BlockShouldBeRenderedINNER(BlockID block, ChunkData chunkData, int localBlockX, int localBlockY, int localBlockZ)
     {
-        // TODO: For cases where adjacent chunk data isn't used, don't bother fetching it
-
-        int localBlockX = (int)localBlockPosition.x;
-        int localBlockY = (int)localBlockPosition.y;
-        int localBlockZ = (int)localBlockPosition.z;
-
         bool frontTest = false;
         bool leftTest = false;
         bool rightTest = false;
@@ -1552,239 +1583,69 @@ public class ChunkHelpers
         bool topTest = false;
         bool bottomTest = false;
 
-        if (block == BlockID.water)
-        {
-            //Top and bottom checks (BlockID.rock is just a lazy way of not rendering invalid y positions)
-            BlockID topBlock = (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1) ? chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] : BlockID.rock;
-            topTest = topBlock == BlockID.air || topBlock == BlockID.sulphur_crystal || topBlock == BlockID.boron_crystal || topBlock == BlockID.blue_crystal || topBlock == BlockID.glass;
+        // Top check
+        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > 36)
+            return true;
 
-            BlockID bottomBlock = (localBlockY > 0) ? chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] : BlockID.rock;
-            bottomTest = bottomBlock == BlockID.air || bottomBlock == BlockID.sulphur_crystal || bottomBlock == BlockID.boron_crystal || bottomBlock == BlockID.blue_crystal || bottomBlock == BlockID.glass;
+        // Bottom check
+        if (localBlockY > 0 && (int)chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] > 36)
+            return true;
 
-            if (topTest || bottomTest)
-                return true;
+        // Front and back checks
+        backTest = (int)chunkData.blocks[localBlockX, localBlockY, localBlockZ - 1] > 36;
+        frontTest = (int)chunkData.blocks[localBlockX, localBlockY, localBlockZ + 1] > 36;
 
-            // Front and back checks
-            BlockID frontBlock = (localBlockZ == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[2].blocks[localBlockX, localBlockY, 0] : chunkData.blocks[localBlockX, localBlockY, localBlockZ + 1];
-            frontTest = frontBlock == BlockID.air || frontBlock == BlockID.sulphur_crystal || frontBlock == BlockID.boron_crystal || frontBlock == BlockID.blue_crystal || frontBlock == BlockID.glass;
+        if (frontTest || backTest)
+            return true;
 
-            BlockID backBlock = (localBlockZ == 0) ? adjacentChunkData[3].blocks[localBlockX, localBlockY, GameData.CHUNK_SIZE - 1] : chunkData.blocks[localBlockX, localBlockY, localBlockZ - 1];
-            backTest = backBlock == BlockID.air || backBlock == BlockID.sulphur_crystal || backBlock == BlockID.boron_crystal || backBlock == BlockID.blue_crystal || backBlock == BlockID.glass;
+        // Left and right checks
+        leftTest = (int)chunkData.blocks[localBlockX - 1, localBlockY, localBlockZ] > 36;
+        rightTest = (int)chunkData.blocks[localBlockX + 1, localBlockY, localBlockZ] > 36;
 
-            if (frontTest || backTest)
-                return true;
-
-            // Left and right checks
-            BlockID leftBlock = (localBlockX == 0) ? adjacentChunkData[0].blocks[GameData.CHUNK_SIZE - 1, localBlockY, localBlockZ] : chunkData.blocks[localBlockX - 1, localBlockY, localBlockZ];
-            leftTest = leftBlock == BlockID.air || leftBlock == BlockID.sulphur_crystal || leftBlock == BlockID.boron_crystal || leftBlock == BlockID.blue_crystal || leftBlock == BlockID.glass;
-
-            BlockID rightBlock = (localBlockX == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[1].blocks[0, localBlockY, localBlockZ] : chunkData.blocks[localBlockX + 1, localBlockY, localBlockZ];
-            rightTest = rightBlock == BlockID.air || rightBlock == BlockID.sulphur_crystal || rightBlock == BlockID.boron_crystal || rightBlock == BlockID.blue_crystal || rightBlock == BlockID.glass;
-
-            return leftTest || rightTest;
-        }
-        else
-        {
-            // Top and bottom checks (BlockID.rock is just a lazy way of not rendering invalid y positions)
-            BlockID topBlock = (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1) ? chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] : BlockID.rock;
-            topTest = topBlock == BlockID.air || topBlock == BlockID.water || topBlock == BlockID.sulphur_crystal || topBlock == BlockID.boron_crystal || topBlock == BlockID.blue_crystal || topBlock == BlockID.glass;
-
-            BlockID bottomBlock = (localBlockY > 0) ? chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] : BlockID.rock;
-            bottomTest = bottomBlock == BlockID.air || bottomBlock == BlockID.water || bottomBlock == BlockID.sulphur_crystal || bottomBlock == BlockID.boron_crystal || bottomBlock == BlockID.blue_crystal || bottomBlock == BlockID.glass;
-
-            if (topTest || bottomTest)
-                return true;
-
-            // Front and back checks
-            BlockID frontBlock = (localBlockZ == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[2].blocks[localBlockX, localBlockY, 0] : chunkData.blocks[localBlockX, localBlockY, localBlockZ + 1];
-            frontTest = frontBlock == BlockID.air || frontBlock == BlockID.water || frontBlock == BlockID.sulphur_crystal || frontBlock == BlockID.boron_crystal || frontBlock == BlockID.blue_crystal || frontBlock == BlockID.glass;
-
-            BlockID backBlock = (localBlockZ == 0) ? adjacentChunkData[3].blocks[localBlockX, localBlockY, GameData.CHUNK_SIZE - 1] : chunkData.blocks[localBlockX, localBlockY, localBlockZ - 1];
-            backTest = backBlock == BlockID.air || backBlock == BlockID.water || backBlock == BlockID.sulphur_crystal || backBlock == BlockID.boron_crystal || backBlock == BlockID.blue_crystal || backBlock == BlockID.glass;
-
-            if (frontTest || backTest)
-                return true;
-
-            // Left and right checks
-            BlockID leftBlock = (localBlockX == 0) ? adjacentChunkData[0].blocks[GameData.CHUNK_SIZE - 1, localBlockY, localBlockZ] : chunkData.blocks[localBlockX - 1, localBlockY, localBlockZ];
-            leftTest = leftBlock == BlockID.air || leftBlock == BlockID.water || leftBlock == BlockID.sulphur_crystal || leftBlock == BlockID.boron_crystal || leftBlock == BlockID.blue_crystal || leftBlock == BlockID.glass;
-
-            BlockID rightBlock = (localBlockX == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[1].blocks[0, localBlockY, localBlockZ] : chunkData.blocks[localBlockX + 1, localBlockY, localBlockZ];
-            rightTest = rightBlock == BlockID.air || rightBlock == BlockID.water || rightBlock == BlockID.sulphur_crystal || rightBlock == BlockID.boron_crystal || rightBlock == BlockID.blue_crystal || rightBlock == BlockID.glass;
-
-            return leftTest || rightTest;
-        }
+        return leftTest || rightTest;
     }
 
-    public static bool BlockShouldBeRenderedNEW(BlockID[,,] chunk, Vector3 localBlockPos)
+    public static bool BlockShouldBeRendered(BlockID block, ChunkData[] adjacentChunkData, ChunkData chunkData, int localBlockX, int localBlockY, int localBlockZ)
     {
-        // IMPORTANT: The FPS is very sensitive to the number of blocks spawned. It turns out the previous function was optimal.
-        BlockID currentBlock = chunk[(int)localBlockPos.x, (int)localBlockPos.y, (int)localBlockPos.z];
+        bool frontTest = false;
+        bool leftTest = false;
+        bool rightTest = false;
+        bool backTest = false;
+        bool topTest = false;
+        bool bottomTest = false;
 
-        // if touching air, a transparent block, or on the very edge and above ground level
-        int localBlockPosX = (int)localBlockPos.x;
-        int localBlockPosY = (int)localBlockPos.y;
-        int localBlockPosZ = (int)localBlockPos.z;
-        if (localBlockPosX == 0 || localBlockPosX == GameData.CHUNK_SIZE - 1 || localBlockPosZ == 0 || localBlockPosZ == GameData.CHUNK_SIZE - 1)
-        {
-            return localBlockPosY >= 62;
-        }
-        else
-        {
-            BlockID leftNeighbor = chunk[localBlockPosX - 1, localBlockPosY, localBlockPosZ];
-            BlockID rightNeighbor = chunk[localBlockPosX + 1, localBlockPosY, localBlockPosZ];
-            BlockID frontNeighbor = chunk[localBlockPosX, localBlockPosY, localBlockPosZ + 1];
-            BlockID backNeighbor = chunk[localBlockPosX, localBlockPosY, localBlockPosZ - 1];
-            if (currentBlock == BlockID.water)
-            {
-                BlockID topNeighbor = chunk[localBlockPosX, localBlockPosY + 1, localBlockPosZ]; // NOTE: I'm assuming this exists. The player COULD place a water block at the top of the map to break this.
-                return topNeighbor == BlockID.air;
-                // if (localBlockPosY == 0)
-                // {
-                //     BlockID topNeighbor = chunk[localBlockPosX, localBlockPosY + 1, localBlockPosZ];
+        // Top and bottom checks (BlockID.rock is just a lazy way of not rendering invalid y positions)
+        // BlockID topBlock = (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1) ? chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] : BlockID.rock;
+        // topTest = (int)topBlock > 36;
+        //topTest = (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1) ? (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > 36 : false;
+        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > 36)
+            return true;
 
-                //     bool leftNeighborCheck = leftNeighbor == BlockID.air || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass;
-                //     bool rightNeighborCheck = rightNeighbor == BlockID.air || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass;
-                //     if (leftNeighborCheck || rightNeighborCheck)
-                //         return true;
+        // BlockID bottomBlock = (localBlockY > 0) ? chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] : BlockID.rock;
+        // bottomTest = (int)bottomBlock > 36;
+        if (localBlockY > 0 && (int)chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] > 36)
+            return true;
 
-                //     bool frontNeighborCheck = frontNeighbor == BlockID.air || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass;
-                //     bool backNeighborCheck = backNeighbor == BlockID.air || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass;
-                //     if (frontNeighborCheck || backNeighborCheck)
-                //         return true;
+        // if (topTest || bottomTest)
+        //     return true;
 
-                //     return topNeighbor == BlockID.air || topNeighbor.ToString().EndsWith("crystal") || topNeighbor == BlockID.glass;
+        // Front and back checks
+        BlockID backBlock = (localBlockZ == 0) ? adjacentChunkData[3].blocks[localBlockX, localBlockY, GameData.CHUNK_SIZE - 1] : chunkData.blocks[localBlockX, localBlockY, localBlockZ - 1];
+        backTest = (int)backBlock > 36;
 
-                //     // return leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass ||
-                //     //        rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass ||
-                //     //        frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass ||
-                //     //        backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass ||
-                //     //        topNeighbor == BlockID.air || topNeighbor == BlockID.water || topNeighbor.ToString().EndsWith("crystal") || topNeighbor == BlockID.glass;
-                // }
-                // else if (localBlockPosY == GameData.WORLD_HEIGHT_LIMIT - 1)
-                // {
-                //     BlockID bottomNeighbor = chunk[localBlockPosX, localBlockPosY - 1, localBlockPosZ];
+        BlockID frontBlock = (localBlockZ == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[2].blocks[localBlockX, localBlockY, 0] : chunkData.blocks[localBlockX, localBlockY, localBlockZ + 1];
+        frontTest = (int)frontBlock > 36;
 
-                //     bool leftNeighborCheck = leftNeighbor == BlockID.air || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass;
-                //     bool rightNeighborCheck = rightNeighbor == BlockID.air || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass;
-                //     if (leftNeighborCheck || rightNeighborCheck)
-                //         return true;
+        if (frontTest || backTest)
+            return true;
 
-                //     bool frontNeighborCheck = frontNeighbor == BlockID.air || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass;
-                //     bool backNeighborCheck = backNeighbor == BlockID.air || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass;
-                //     if (frontNeighborCheck || backNeighborCheck)
-                //         return true;
+        // Left and right checks
+        BlockID leftBlock = (localBlockX == 0) ? adjacentChunkData[0].blocks[GameData.CHUNK_SIZE - 1, localBlockY, localBlockZ] : chunkData.blocks[localBlockX - 1, localBlockY, localBlockZ];
+        leftTest = (int)leftBlock > 36;
 
-                //     return bottomNeighbor == BlockID.air || bottomNeighbor.ToString().EndsWith("crystal") || bottomNeighbor == BlockID.glass;
+        BlockID rightBlock = (localBlockX == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[1].blocks[0, localBlockY, localBlockZ] : chunkData.blocks[localBlockX + 1, localBlockY, localBlockZ];
+        rightTest = (int)rightBlock > 36;
 
-                //     // return leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass ||
-                //     //        rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass ||
-                //     //        frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass ||
-                //     //        backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass ||
-                //     //        bottomNeighbor == BlockID.air || bottomNeighbor == BlockID.water || bottomNeighbor.ToString().EndsWith("crystal") || bottomNeighbor == BlockID.glass;
-                // }
-                // else
-                // {
-                //     BlockID topNeighbor = chunk[localBlockPosX, localBlockPosY + 1, localBlockPosZ];
-                //     BlockID bottomNeighbor = chunk[localBlockPosX, localBlockPosY - 1, localBlockPosZ];
-
-                //     bool leftNeighborCheck = leftNeighbor == BlockID.air || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass;
-                //     bool rightNeighborCheck = rightNeighbor == BlockID.air || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass;
-                //     if (leftNeighborCheck || rightNeighborCheck)
-                //         return true;
-
-                //     bool frontNeighborCheck = frontNeighbor == BlockID.air || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass;
-                //     bool backNeighborCheck = backNeighbor == BlockID.air || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass;
-                //     if (frontNeighborCheck || backNeighborCheck)
-                //         return true;
-
-                //     bool bottomNeighborCheck = bottomNeighbor == BlockID.air || bottomNeighbor.ToString().EndsWith("crystal") || bottomNeighbor == BlockID.glass;
-                //     bool topNeighborCheck = topNeighbor == BlockID.air || topNeighbor.ToString().EndsWith("crystal") || topNeighbor == BlockID.glass;
-
-                //     return bottomNeighborCheck || topNeighborCheck;
-
-                //     // return leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass ||
-                //     //        rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass ||
-                //     //        frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass ||
-                //     //        backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass ||
-                //     //        topNeighbor == BlockID.air || topNeighbor == BlockID.water || topNeighbor.ToString().EndsWith("crystal") || topNeighbor == BlockID.glass ||
-                //     //        bottomNeighbor == BlockID.air || bottomNeighbor == BlockID.water || bottomNeighbor.ToString().EndsWith("crystal") || bottomNeighbor == BlockID.glass;
-                // }
-            }
-            else
-            {
-                if (localBlockPosY == 0)
-                {
-                    BlockID topNeighbor = chunk[localBlockPosX, localBlockPosY + 1, localBlockPosZ];
-
-                    bool leftNeighborCheck = leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass;
-                    bool rightNeighborCheck = rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass;
-                    if (leftNeighborCheck || rightNeighborCheck)
-                        return true;
-
-                    bool frontNeighborCheck = frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass;
-                    bool backNeighborCheck = backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass;
-                    if (frontNeighborCheck || backNeighborCheck)
-                        return true;
-
-                    return topNeighbor == BlockID.air || topNeighbor == BlockID.water || topNeighbor.ToString().EndsWith("crystal") || topNeighbor == BlockID.glass;
-
-                    // return leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass ||
-                    //        rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass ||
-                    //        frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass ||
-                    //        backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass ||
-                    //        topNeighbor == BlockID.air || topNeighbor == BlockID.water || topNeighbor.ToString().EndsWith("crystal") || topNeighbor == BlockID.glass;
-                }
-                else if (localBlockPosY == GameData.WORLD_HEIGHT_LIMIT - 1)
-                {
-                    BlockID bottomNeighbor = chunk[localBlockPosX, localBlockPosY - 1, localBlockPosZ];
-
-                    bool leftNeighborCheck = leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass;
-                    bool rightNeighborCheck = rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass;
-                    if (leftNeighborCheck || rightNeighborCheck)
-                        return true;
-
-                    bool frontNeighborCheck = frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass;
-                    bool backNeighborCheck = backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass;
-                    if (frontNeighborCheck || backNeighborCheck)
-                        return true;
-
-                    return bottomNeighbor == BlockID.air || bottomNeighbor == BlockID.water || bottomNeighbor.ToString().EndsWith("crystal") || bottomNeighbor == BlockID.glass;
-
-                    // return leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass ||
-                    //        rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass ||
-                    //        frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass ||
-                    //        backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass ||
-                    //        bottomNeighbor == BlockID.air || bottomNeighbor == BlockID.water || bottomNeighbor.ToString().EndsWith("crystal") || bottomNeighbor == BlockID.glass;
-                }
-                else
-                {
-                    BlockID topNeighbor = chunk[localBlockPosX, localBlockPosY + 1, localBlockPosZ];
-                    BlockID bottomNeighbor = chunk[localBlockPosX, localBlockPosY - 1, localBlockPosZ];
-
-                    bool leftNeighborCheck = leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass;
-                    bool rightNeighborCheck = rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass;
-                    if (leftNeighborCheck || rightNeighborCheck)
-                        return true;
-
-                    bool frontNeighborCheck = frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass;
-                    bool backNeighborCheck = backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass;
-                    if (frontNeighborCheck || backNeighborCheck)
-                        return true;
-
-                    bool bottomNeighborCheck = bottomNeighbor == BlockID.air || bottomNeighbor == BlockID.water || bottomNeighbor.ToString().EndsWith("crystal") || bottomNeighbor == BlockID.glass;
-                    bool topNeighborCheck = topNeighbor == BlockID.air || topNeighbor == BlockID.water || topNeighbor.ToString().EndsWith("crystal") || topNeighbor == BlockID.glass;
-
-                    return bottomNeighborCheck || topNeighborCheck;
-
-                    // return leftNeighbor == BlockID.air || leftNeighbor == BlockID.water || leftNeighbor.ToString().EndsWith("crystal") || leftNeighbor == BlockID.glass ||
-                    //        rightNeighbor == BlockID.air || rightNeighbor == BlockID.water || rightNeighbor.ToString().EndsWith("crystal") || rightNeighbor == BlockID.glass ||
-                    //        frontNeighbor == BlockID.air || frontNeighbor == BlockID.water || frontNeighbor.ToString().EndsWith("crystal") || frontNeighbor == BlockID.glass ||
-                    //        backNeighbor == BlockID.air || backNeighbor == BlockID.water || backNeighbor.ToString().EndsWith("crystal") || backNeighbor == BlockID.glass ||
-                    //        topNeighbor == BlockID.air || topNeighbor == BlockID.water || topNeighbor.ToString().EndsWith("crystal") || topNeighbor == BlockID.glass ||
-                    //        bottomNeighbor == BlockID.air || bottomNeighbor == BlockID.water || bottomNeighbor.ToString().EndsWith("crystal") || bottomNeighbor == BlockID.glass;
-                }
-            }
-        }
+        return leftTest || rightTest;
     }
 }

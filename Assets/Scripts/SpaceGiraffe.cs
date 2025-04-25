@@ -41,8 +41,6 @@ public class SpaceGiraffe : MonoBehaviour
         {
             float currentTime = Time.realtimeSinceStartup;
 
-            transform.rotation = Quaternion.Euler(0, transform.eulerAngles.y, 0);
-
             if (timeDamaged != 0 && Time.time - timeDamaged > 0.15F)
             {
                 foreach (Renderer renderer in GetComponentsInChildren<Renderer>())
@@ -52,6 +50,8 @@ public class SpaceGiraffe : MonoBehaviour
 
             if (health > 0)
             {
+                transform.rotation = Quaternion.Euler(0, transform.eulerAngles.y, 0);
+
                 if (!(walking || rotating))
                 {
                     if (currentTime - lastActionTime > actionDelay)
@@ -130,7 +130,7 @@ public class SpaceGiraffe : MonoBehaviour
                     // Rotate
                     rigidbody.constraints = RigidbodyConstraints.None;
                     if (transform.eulerAngles.z - 90 < 0.5F)
-                        transform.RotateAround(transform.position + 1.8F*Vector3.down, transform.forward, 90 * Time.deltaTime);
+                        transform.RotateAround(transform.position + 1.5F*Vector3.down, transform.forward, 90 * Time.deltaTime);
                     else
                         deathAnimationFinished = true;
                 }

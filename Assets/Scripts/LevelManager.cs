@@ -27,6 +27,11 @@ public class LevelManager : MonoBehaviour
     public GameObject brownMobPrefab;
     public GameObject spaceGiraffePrefab;
 
+    public GameObject minilight_pz;
+    public GameObject minilight_nz;
+    public GameObject minilight_px;
+    public GameObject minilight_nx;
+
     void Awake()
     {
         Cursor.lockState = CursorLockMode.None;
@@ -58,7 +63,10 @@ public class LevelManager : MonoBehaviour
                 MoonData moonData;
                 using (FileStream file = File.Open(moonDataFile, FileMode.Open))
                     moonData = (MoonData)(new BinaryFormatter()).Deserialize(file);
-                moons[moon].transform.Find("Text").GetComponent<Text>().text = string.Format("{0} - {1} SQ KM", moonName, moonData.distanceTraveled);
+                if (moonData.distanceTraveled == 0)
+                    moons[moon].transform.Find("Text").GetComponent<Text>().text = $"{moonName} - 0 SQ KM";
+                else
+                    moons[moon].transform.Find("Text").GetComponent<Text>().text = $"{moonName} - {moonData.distanceTraveled:F2} SQ KM";
             }
         }
 
@@ -120,8 +128,8 @@ public class LevelManager : MonoBehaviour
 
     private IEnumerator _GenerateMoon(int moon, MoonData moonData)
     {
-        //int renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
-        int renderDistance = 1;
+        int renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
+        //int renderDistance = 1;
         totalProgressCount = GameData.CHUNK_SIZE*(2*renderDistance + 1)*(2*renderDistance + 1);
         loadingState = LoadingState.GENERATING;
 
@@ -178,9 +186,10 @@ public class LevelManager : MonoBehaviour
             for (int chunkZ = playerChunkZ - renderDistance; chunkZ <= playerChunkZ + renderDistance; chunkZ++)
             {
                 // Instantiate blocks
-                GameObject chunk = GameObject.Find($"Chunk ({chunkX},{chunkZ})");
+                GameObject chunk = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})").gameObject;
                 ChunkData chunkData = chunk.GetComponent<ChunkData>();
                 adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(chunkParent, chunkX, chunkZ);
+
                 for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
                 {
                     for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
@@ -188,33 +197,83 @@ public class LevelManager : MonoBehaviour
                         for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
                         {
                             BlockID block = chunkData.blocks[localBlockX, localBlockY, localBlockZ];
-                            if (block != BlockID.air && ChunkHelpers.BlockShouldBeRendered(block, adjacentChunkData, chunkData, new Vector3(localBlockX, localBlockY, localBlockZ)))
+                            if (block != BlockID.air)
                             {
-                                GameObject blockObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                                blockObj.hideFlags = HideFlags.HideInHierarchy;
-                                blockObj.layer = LayerMask.NameToLayer("Block");
-                                blockObj.GetComponent<MeshFilter>().mesh = blockMesh;
-                                blockObj.GetComponent<Renderer>().material = blockMaterials[(int)block];
-                                blockObj.GetComponent<BoxCollider>().size = new Vector3(0.98F, 0.98F, 0.98F);
-                                blockObj.GetComponent<BoxCollider>().material.dynamicFriction = 0;
-                                blockObj.GetComponent<BoxCollider>().material.staticFriction = 0;
+                                bool shouldBeRendered;
+                                if (block == BlockID.topsoil)
+                                    shouldBeRendered = true;
+                                else if (localBlockX > 0 && localBlockX < GameData.CHUNK_SIZE - 1 && localBlockZ > 0 && localBlockZ < GameData.CHUNK_SIZE - 1)
+                                    shouldBeRendered = ChunkHelpers.BlockShouldBeRenderedINNER(block, chunkData, localBlockX, localBlockY, localBlockZ);
+                                else
+                                    shouldBeRendered = ChunkHelpers.BlockShouldBeRendered(block, adjacentChunkData, chunkData, localBlockX, localBlockY, localBlockZ);
 
-                                BlockData blockData = blockObj.AddComponent<BlockData>();
-                                blockData.blockID = block;
-                                blockData.localPosX = localBlockX;
-                                blockData.localPosY = localBlockY;
-                                blockData.localPosZ = localBlockZ;
-
-                                blockObj.transform.position = new Vector3(
-                                    (chunkX*GameData.CHUNK_SIZE + localBlockX), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ)
-                                );
-
-                                blockObj.transform.SetParent(chunk.transform);
-
-                                if (block == BlockID.light)
+                                if (shouldBeRendered)
                                 {
-                                    Light light = blockObj.AddComponent<Light>();
-                                    light.type = LightType.Point;
+                                    GameObject blockObj;
+                                    BlockData blockData;
+
+                                    if (block.ToString().StartsWith("minilight"))
+                                    {
+                                        if (block == BlockID.minilight_nz) // minilight_nz
+                                        {
+                                            blockObj = Instantiate(minilight_nz);
+                                            //blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z - 0.485F);
+                                            blockObj.transform.position = new Vector3(
+                                                (chunkX*GameData.CHUNK_SIZE + localBlockX), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ - 0.485F)
+                                            );
+                                        }
+                                        else if (block == BlockID.minilight_pz) // minilight_pz
+                                        {
+                                            blockObj = Instantiate(minilight_pz);
+                                            //blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z + 0.485F);
+                                            blockObj.transform.position = new Vector3(
+                                                (chunkX*GameData.CHUNK_SIZE + localBlockX), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ + 0.485F)
+                                            );
+                                        }
+                                        else if (block == BlockID.minilight_nx) // minilight_nx
+                                        {
+                                            blockObj = Instantiate(minilight_nx);
+                                            //blockObj.transform.position = new Vector3(newBlockPos.x - 0.485F, newBlockPos.y, newBlockPos.z);
+                                            blockObj.transform.position = new Vector3(
+                                                (chunkX*GameData.CHUNK_SIZE + localBlockX - 0.485F), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ)
+                                            );
+                                        }
+                                        else // minilight_px (Vector3.left)
+                                        {
+                                            blockObj = Instantiate(minilight_px);
+                                            //blockObj.transform.position = new Vector3(newBlockPos.x + 0.485F, newBlockPos.y, newBlockPos.z);
+                                            blockObj.transform.position = new Vector3(
+                                                (chunkX*GameData.CHUNK_SIZE + localBlockX + 0.485F), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ)
+                                            );
+                                        }
+                                    }
+                                    else
+                                    {
+                                        blockObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                                        blockObj.hideFlags = HideFlags.HideInHierarchy;
+                                        blockObj.layer = LayerMask.NameToLayer("Block");
+                                        blockObj.GetComponent<MeshFilter>().mesh = blockMesh;
+                                        blockObj.GetComponent<Renderer>().material = blockMaterials[(int)block];
+                                        blockObj.GetComponent<BoxCollider>().size = new Vector3(0.98F, 0.98F, 0.98F);
+                                        //blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z);
+                                        blockObj.transform.position = new Vector3(
+                                            (chunkX*GameData.CHUNK_SIZE + localBlockX), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ)
+                                        );
+                                    }
+
+                                    blockData = blockObj.AddComponent<BlockData>();
+                                    blockData.blockID = block;
+                                    blockData.localPosX = localBlockX;
+                                    blockData.localPosY = localBlockY;
+                                    blockData.localPosZ = localBlockZ;
+
+                                    blockObj.transform.SetParent(chunk.transform);
+
+                                    if (block == BlockID.light)
+                                    {
+                                        Light light = blockObj.AddComponent<Light>();
+                                        light.type = LightType.Point;
+                                    }
                                 }
                             }
                         }
@@ -224,43 +283,43 @@ public class LevelManager : MonoBehaviour
                 }
 
                 // Spawn mobs
-                MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
-                if (mobs != null)
-                {
-                    foreach (MobData mobData in mobs)
-                    {
-                        if (mobData == null)
-                        {
-                            Debug.Log("NULL MOB DATA");
-                            continue;
-                        }
+                // MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
+                // if (mobs != null)
+                // {
+                //     foreach (MobData mobData in mobs)
+                //     {
+                //         if (mobData == null)
+                //         {
+                //             Debug.Log("NULL MOB DATA");
+                //             continue;
+                //         }
 
-                        Vector3 mobPosition = new Vector3(
-                            mobData.positionX,
-                            mobData.positionY,
-                            mobData.positionZ
-                        );
-                        Quaternion mobRotation = Quaternion.Euler(
-                            0,
-                            mobData.rotationY,
-                            0
-                        );
+                //         Vector3 mobPosition = new Vector3(
+                //             mobData.positionX,
+                //             mobData.positionY,
+                //             mobData.positionZ
+                //         );
+                //         Quaternion mobRotation = Quaternion.Euler(
+                //             0,
+                //             mobData.rotationY,
+                //             0
+                //         );
 
-                        if (mobData.mobID == 0) // Green mob
-                        {
-                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunk.transform);
-                        }
-                        else if (mobData.mobID == 1) // Brown mob
-                        {
-                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunk.transform);
-                            mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
-                        }
-                        else if (mobData.mobID == 2) // Space giraffe
-                        {
-                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunk.transform);
-                        }
-                    }
-                }
+                //         if (mobData.mobID == 0) // Green mob
+                //         {
+                //             GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunk.transform);
+                //         }
+                //         else if (mobData.mobID == 1) // Brown mob
+                //         {
+                //             GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunk.transform);
+                //             mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
+                //         }
+                //         else if (mobData.mobID == 2) // Space giraffe
+                //         {
+                //             GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunk.transform);
+                //         }
+                //     }
+                // }
             }
         }
 

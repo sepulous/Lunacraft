@@ -26,8 +26,6 @@ class GreenMob : MonoBehaviour
     void Awake()
     {
         collider = gameObject.AddComponent<BoxCollider>();
-        collider.material.staticFriction = 0F;
-        collider.material.dynamicFriction = 0F;
         rigidbody = gameObject.AddComponent<Rigidbody>();
         rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
     }
