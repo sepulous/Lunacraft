@@ -25,11 +25,11 @@ public class WorldClock : MonoBehaviour
         omega = 360F / (phaseCount * secondsPerPhase);
     }
 
-    void FixedUpdate()
+    void Update()
     {
         if (timePasses)
         {
-            gameTimeInSeconds += Time.fixedDeltaTime;
+            gameTimeInSeconds += Time.deltaTime;
 
             // Update skybox
             float skyboxAngle = (startAngle + omega*gameTimeInSeconds);

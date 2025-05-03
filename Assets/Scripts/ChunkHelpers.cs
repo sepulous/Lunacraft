@@ -1385,92 +1385,100 @@ public class ChunkHelpers
         //
         // Mobs
         //
-        // if (moonData.wildlifeLevel > 0)
-        // {
-        //     int mobSpawnChance = UnityEngine.Random.Range(0, 10 - 2*moonData.wildlifeLevel);
-        //     if (mobSpawnChance == 0)
-        //     {
-        //         int mobCount = UnityEngine.Random.Range(1, moonData.wildlifeLevel + 1);
-        //         MobData[] mobs = new MobData[mobCount];
-        //         for (int i = 0; i < mobCount; i++)
-        //         {
-        //             int mobType = UnityEngine.Random.Range(0, 10);
-        //             if (mobType <= 3)
-        //                 mobType = 0;
-        //             else if (mobType <= 7)
-        //                 mobType = 1;
-        //             else
-        //                 mobType = 2;
+        if (moonData.wildlifeLevel > 0)
+        {
+            int mobSpawnChance = UnityEngine.Random.Range(0, 10 - 2*moonData.wildlifeLevel);
+            if (mobSpawnChance == 0)
+            {
+                int mobCount = UnityEngine.Random.Range(1, moonData.wildlifeLevel + 1);
+                MobData[] mobs = new MobData[mobCount];
+                for (int i = 0; i < mobCount; i++)
+                {
+                    int mobType = UnityEngine.Random.Range(1, 101);
+                    if (mobType <= 30)
+                        mobType = 0;
+                    else if (mobType <= 60)
+                        mobType = 1;
+                    else if (mobType <= 90)
+                        mobType = 2;
+                    else
+                        mobType = 3;
 
-        //             // if (mobType == 0 || mobType == 1 || mobType == 2) // Green/brown mobs (green ~ 0, brown ~ 1)
-        //             // {
-        //                 int localPosX = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
-        //                 int localPosZ = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
-        //                 int localPosY = 0;
-        //                 for (int j = 63; j < GameData.WORLD_HEIGHT_LIMIT; j++)
-        //                 {
-        //                     if (chunk[localPosX, j, localPosZ] == BlockID.air)
-        //                     {
-        //                         localPosY = j;
-        //                         break;
-        //                     }
-        //                 }
+                    if (mobType == 0 || mobType == 1) // Green/brown mobs (green ~ 0, brown ~ 1)
+                    {
+                        int localPosX = UnityEngine.Random.Range(2, GameData.CHUNK_SIZE - 2);
+                        int localPosZ = UnityEngine.Random.Range(2, GameData.CHUNK_SIZE - 2);
+                        int localPosY = 0;
+                        for (int j = 63; j < GameData.WORLD_HEIGHT_LIMIT; j++)
+                        {
+                            if (chunk[localPosX, j, localPosZ] == BlockID.air)
+                            {
+                                localPosY = j;
+                                break;
+                            }
+                        }
 
-        //                 Vector3 globalPos = new Vector3(
-        //                     chunkX*GameData.CHUNK_SIZE + localPosX,
-        //                     localPosY,
-        //                     chunkZ*GameData.CHUNK_SIZE + localPosZ
-        //                 );
+                        Vector3 globalPos = new Vector3(
+                            chunkX*GameData.CHUNK_SIZE + localPosX,
+                            localPosY,
+                            chunkZ*GameData.CHUNK_SIZE + localPosZ
+                        );
 
-        //                 MobData mobData = new MobData();
-        //                 mobData.mobID = mobType;
-        //                 mobData.positionX = globalPos.x;
-        //                 mobData.positionY = globalPos.y + ((mobType == 2) ? 2 : 0); // Giraffes need to be shifted up
-        //                 mobData.positionZ = globalPos.z;
-        //                 mobData.rotationY = 0;
-        //                 mobData.aggressive = false;
-        //                 mobs[i] = mobData;
-        //             //}
-        //             // else if (mobType == 2) // Giraffe
-        //             // {
-        //             //     int herdSize = UnityEngine.Random.Range(1, (int)Mathf.Min(5, mobCount - i));
-        //             //     int herdCenterX = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
-        //             //     int herdCenterZ = UnityEngine.Random.Range(0, GameData.CHUNK_SIZE);
-        //             //     for (int j = 0; j < herdSize; j++)
-        //             //     {
-        //             //         int giraffePosX = herdCenterX + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterX), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterX));
-        //             //         int giraffePosZ = herdCenterZ + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterZ), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterZ));
-        //             //         int giraffePosY = 0;
-        //             //         for (int k = 63; k < GameData.WORLD_HEIGHT_LIMIT; k++)
-        //             //         {
-        //             //             if (chunk[giraffePosX, k, giraffePosZ] == BlockID.air)
-        //             //             {
-        //             //                 giraffePosY = k;
-        //             //                 break;
-        //             //             }
-        //             //         }
+                        MobData mobData = new MobData();
+                        mobData.mobID = mobType;
+                        mobData.astronautType = AstronautType.WHITE; // Doesn't matter
+                        mobData.positionX = globalPos.x;
+                        mobData.positionY = globalPos.y + 1;
+                        mobData.positionZ = globalPos.z;
+                        mobData.rotationY = 0;
+                        mobData.aggressive = false;
+                        mobs[i] = mobData;
+                    }
+                    else if (mobType == 2) // Giraffe herd
+                    {
+                        int herdSize = UnityEngine.Random.Range(1, (int)Mathf.Min(5, mobCount - i));
+                        int herdCenterX = UnityEngine.Random.Range(2, GameData.CHUNK_SIZE - 2);
+                        int herdCenterZ = UnityEngine.Random.Range(2, GameData.CHUNK_SIZE - 2);
+                        for (int j = 0; j < herdSize; j++)
+                        {
+                            int giraffePosX = herdCenterX + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterX), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterX));
+                            int giraffePosZ = herdCenterZ + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterZ), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterZ));
+                            int giraffePosY = 0;
+                            for (int k = 63; k < GameData.WORLD_HEIGHT_LIMIT; k++)
+                            {
+                                if (chunk[giraffePosX, k, giraffePosZ] == BlockID.air)
+                                {
+                                    giraffePosY = k + 2;
+                                    break;
+                                }
+                            }
 
-        //             //         Vector3 globalPos = new Vector3(
-        //             //             chunkX*GameData.CHUNK_SIZE + giraffePosX,
-        //             //             giraffePosY,
-        //             //             chunkZ*GameData.CHUNK_SIZE + giraffePosZ
-        //             //         );
+                            Vector3 globalPos = new Vector3(
+                                chunkX*GameData.CHUNK_SIZE + giraffePosX,
+                                giraffePosY,
+                                chunkZ*GameData.CHUNK_SIZE + giraffePosZ
+                            );
 
-        //             //         MobData mobData = new MobData();
-        //             //         mobData.mobID = mobType;
-        //             //         mobData.positionX = globalPos.x;
-        //             //         mobData.positionY = globalPos.y;
-        //             //         mobData.positionZ = globalPos.z;
-        //             //         mobData.rotationY = 0;
-        //             //         mobData.aggressive = false;
-        //             //         mobs[i + j] = mobData;
-        //             //     }
-        //             //     i += herdSize;
-        //             // }
-        //         }
-        //         MobHelpers.SaveMobsToChunk(mobs, moonData.moon, chunkX, chunkZ);
-        //     }
-        // }
+                            MobData mobData = new MobData();
+                            mobData.mobID = mobType;
+                            mobData.astronautType = AstronautType.WHITE; // Doesn't matter
+                            mobData.positionX = globalPos.x;
+                            mobData.positionY = globalPos.y;
+                            mobData.positionZ = globalPos.z;
+                            mobData.rotationY = 0;
+                            mobData.aggressive = false;
+                            mobs[i + j] = mobData;
+                        }
+                        i += herdSize;
+                    }
+                    else // Astronaut(s)
+                    {
+
+                    }
+                }
+                MobHelpers.SaveMobsToChunk(mobs, moonData.moon, chunkX, chunkZ);
+            }
+        }
 
         UnityEngine.Random.state = initialRandomState; // Reset so we don't interfere with anything else (but maybe every use of Random should be based on the seed?)
     }
@@ -1583,24 +1591,26 @@ public class ChunkHelpers
         bool topTest = false;
         bool bottomTest = false;
 
+        int idCheck = (block == BlockID.water) ? 37 : 36;
+
         // Top check
-        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > 36)
+        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > idCheck)
             return true;
 
         // Bottom check
-        if (localBlockY > 0 && (int)chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] > 36)
+        if (localBlockY > 0 && (int)chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] > idCheck)
             return true;
 
         // Front and back checks
-        backTest = (int)chunkData.blocks[localBlockX, localBlockY, localBlockZ - 1] > 36;
-        frontTest = (int)chunkData.blocks[localBlockX, localBlockY, localBlockZ + 1] > 36;
+        backTest = (int)chunkData.blocks[localBlockX, localBlockY, localBlockZ - 1] > idCheck;
+        frontTest = (int)chunkData.blocks[localBlockX, localBlockY, localBlockZ + 1] > idCheck;
 
         if (frontTest || backTest)
             return true;
 
         // Left and right checks
-        leftTest = (int)chunkData.blocks[localBlockX - 1, localBlockY, localBlockZ] > 36;
-        rightTest = (int)chunkData.blocks[localBlockX + 1, localBlockY, localBlockZ] > 36;
+        leftTest = (int)chunkData.blocks[localBlockX - 1, localBlockY, localBlockZ] > idCheck;
+        rightTest = (int)chunkData.blocks[localBlockX + 1, localBlockY, localBlockZ] > idCheck;
 
         return leftTest || rightTest;
     }
@@ -1614,16 +1624,18 @@ public class ChunkHelpers
         bool topTest = false;
         bool bottomTest = false;
 
+        int idCheck = (block == BlockID.water) ? 37 : 36;
+
         // Top and bottom checks (BlockID.rock is just a lazy way of not rendering invalid y positions)
         // BlockID topBlock = (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1) ? chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] : BlockID.rock;
         // topTest = (int)topBlock > 36;
         //topTest = (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1) ? (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > 36 : false;
-        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > 36)
+        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > idCheck)
             return true;
 
         // BlockID bottomBlock = (localBlockY > 0) ? chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] : BlockID.rock;
         // bottomTest = (int)bottomBlock > 36;
-        if (localBlockY > 0 && (int)chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] > 36)
+        if (localBlockY > 0 && (int)chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] > idCheck)
             return true;
 
         // if (topTest || bottomTest)
@@ -1631,20 +1643,20 @@ public class ChunkHelpers
 
         // Front and back checks
         BlockID backBlock = (localBlockZ == 0) ? adjacentChunkData[3].blocks[localBlockX, localBlockY, GameData.CHUNK_SIZE - 1] : chunkData.blocks[localBlockX, localBlockY, localBlockZ - 1];
-        backTest = (int)backBlock > 36;
+        backTest = (int)backBlock > idCheck;
 
         BlockID frontBlock = (localBlockZ == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[2].blocks[localBlockX, localBlockY, 0] : chunkData.blocks[localBlockX, localBlockY, localBlockZ + 1];
-        frontTest = (int)frontBlock > 36;
+        frontTest = (int)frontBlock > idCheck;
 
         if (frontTest || backTest)
             return true;
 
         // Left and right checks
         BlockID leftBlock = (localBlockX == 0) ? adjacentChunkData[0].blocks[GameData.CHUNK_SIZE - 1, localBlockY, localBlockZ] : chunkData.blocks[localBlockX - 1, localBlockY, localBlockZ];
-        leftTest = (int)leftBlock > 36;
+        leftTest = (int)leftBlock > idCheck;
 
         BlockID rightBlock = (localBlockX == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[1].blocks[0, localBlockY, localBlockZ] : chunkData.blocks[localBlockX + 1, localBlockY, localBlockZ];
-        rightTest = (int)rightBlock > 36;
+        rightTest = (int)rightBlock > idCheck;
 
         return leftTest || rightTest;
     }

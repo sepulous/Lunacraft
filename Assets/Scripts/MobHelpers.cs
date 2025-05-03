@@ -5,9 +5,16 @@ using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
 
 [Serializable]
+public enum AstronautType
+{
+    WHITE, GREEN, BLUE, PINK, YELLOW
+}
+
+[Serializable]
 public class MobData
 {
     public int mobID;
+    public AstronautType astronautType;
     public float positionX;
     public float positionY;
     public float positionZ;

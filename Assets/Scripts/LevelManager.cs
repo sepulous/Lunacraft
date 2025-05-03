@@ -281,45 +281,52 @@ public class LevelManager : MonoBehaviour
                     currentProgressCount++;
                     yield return null;
                 }
+            }
+        }
 
-                // Spawn mobs
-                // MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
-                // if (mobs != null)
-                // {
-                //     foreach (MobData mobData in mobs)
-                //     {
-                //         if (mobData == null)
-                //         {
-                //             Debug.Log("NULL MOB DATA");
-                //             continue;
-                //         }
+        // Spawn mobs
+        for (int chunkX = playerChunkX - renderDistance; chunkX <= playerChunkX + renderDistance; chunkX++)
+        {
+            for (int chunkZ = playerChunkZ - renderDistance; chunkZ <= playerChunkZ + renderDistance; chunkZ++)
+            {
+                Transform chunkTransform = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})");
+                MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
+                if (mobs != null)
+                {
+                    foreach (MobData mobData in mobs)
+                    {
+                        if (mobData == null)
+                        {
+                            Debug.Log("NULL MOB DATA");
+                            continue;
+                        }
 
-                //         Vector3 mobPosition = new Vector3(
-                //             mobData.positionX,
-                //             mobData.positionY,
-                //             mobData.positionZ
-                //         );
-                //         Quaternion mobRotation = Quaternion.Euler(
-                //             0,
-                //             mobData.rotationY,
-                //             0
-                //         );
+                        Vector3 mobPosition = new Vector3(
+                            mobData.positionX,
+                            mobData.positionY,
+                            mobData.positionZ
+                        );
+                        Quaternion mobRotation = Quaternion.Euler(
+                            0,
+                            mobData.rotationY,
+                            0
+                        );
 
-                //         if (mobData.mobID == 0) // Green mob
-                //         {
-                //             GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunk.transform);
-                //         }
-                //         else if (mobData.mobID == 1) // Brown mob
-                //         {
-                //             GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunk.transform);
-                //             mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
-                //         }
-                //         else if (mobData.mobID == 2) // Space giraffe
-                //         {
-                //             GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunk.transform);
-                //         }
-                //     }
-                // }
+                        if (mobData.mobID == 0) // Green mob
+                        {
+                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                        else if (mobData.mobID == 1) // Brown mob
+                        {
+                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunkTransform);
+                            mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
+                        }
+                        else if (mobData.mobID == 2) // Space giraffe
+                        {
+                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                    }
+                }
             }
         }
 

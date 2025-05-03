@@ -21,6 +21,13 @@ class RowRenderTask
     public int newPlayerChunkZ;
 }
 
+class ChunkRenderTask
+{
+    public int chunkX;
+    public int chunkZ;
+    public bool isBorderChunk;
+}
+
 public class ChunkManager : MonoBehaviour
 {
     private GameObject chunkParent = null;
@@ -87,48 +94,62 @@ public class ChunkManager : MonoBehaviour
             moonData = (MoonData)(new BinaryFormatter()).Deserialize(file);
     }
 
+    /*
+        // Destroy distant chunk and its child blocks
+        // After a bit of experimenting, apparently this is only a small part of the lag spike
+        ChunkData distantRenderedChunkData = distantRenderedChunk.GetComponent<ChunkData>();
+        ChunkHelpers.SaveChunkToFile(distantRenderedChunkData.blocks, moon, distantRenderedChunkData.globalPosX, distantRenderedChunkData.globalPosZ);
+        Destroy(distantRenderedChunk);
+
+        // Bring it back to hold block data
+        GameObject newDistantRenderedChunk = new GameObject($"Chunk ({distantRenderedChunkData.globalPosX},{distantRenderedChunkData.globalPosZ})");
+        newDistantRenderedChunk.transform.SetParent(chunkParent.transform);
+        newDistantRenderedChunk.tag = "Chunk";
+        ChunkData newDistantRenderedChunkData = newDistantRenderedChunk.AddComponent<ChunkData>();
+        newDistantRenderedChunkData.globalPosX = distantRenderedChunkData.globalPosX;
+        newDistantRenderedChunkData.globalPosZ = distantRenderedChunkData.globalPosZ;
+        newDistantRenderedChunkData.blocks = distantRenderedChunkData.blocks;
+    */
+
     void Update()
     {
         // Handle changed render distance
-        // int newRenderDistance = OptionsManager.GetCurrentOptions().renderDistance;
-        // if (newRenderDistance < renderDistance)
-        // {
-        //     GameObject[] chunkObjects = GameObject.FindGameObjectsWithTag("Chunk");
-        //     for (int i = 0; i < chunkObjects.Length; i++)
-        //     {
-        //         GameObject chunkObj = chunkObjects[i];
-        //         ChunkData chunkData = chunkObj.GetComponent<ChunkData>();
-        //         if (chunkData.globalPosX > playerChunkX + newRenderDistance + 1 || chunkData.globalPosX < playerChunkX - newRenderDistance - 1
-        //          || chunkData.globalPosZ > playerChunkZ + newRenderDistance + 1 || chunkData.globalPosZ < playerChunkZ - newRenderDistance - 1)
-        //         {
-        //             ChunkHelpers.SaveChunkToFile(chunkData.blocks, moon, chunkData.globalPosX, chunkData.globalPosZ);
-        //             Destroy(chunkObj);
-        //         }
-        //         else if (chunkData.globalPosX == playerChunkX + newRenderDistance + 1 || chunkData.globalPosX == playerChunkX - newRenderDistance - 1
-        //               || chunkData.globalPosZ == playerChunkZ + newRenderDistance + 1 || chunkData.globalPosZ == playerChunkZ - newRenderDistance - 1)
-        //         {
-        //             Transform[] childBlocks = new Transform[chunkObj.transform.childCount];
-        //             for (int j = 0; j < chunkObj.transform.childCount; j++)
-        //                 childBlocks[j] = chunkObj.transform.GetChild(j);
+        int newRenderDistance = OptionsManager.GetCurrentOptions().renderDistance;
+        if (newRenderDistance < renderDistance)
+        {
+            for (int i = 0; i < chunkParent.transform.childCount; i++)
+            {
+                GameObject chunk = chunkParent.transform.GetChild(i).gameObject;
+                ChunkData chunkData = chunk.GetComponent<ChunkData>();
+                if (chunkData.globalPosX > playerChunkX + newRenderDistance + 1 || chunkData.globalPosX < playerChunkX - newRenderDistance - 1
+                 || chunkData.globalPosZ > playerChunkZ + newRenderDistance + 1 || chunkData.globalPosZ < playerChunkZ - newRenderDistance - 1)
+                {
+                    ChunkHelpers.SaveChunkToFile(chunkData.blocks, moon, chunkData.globalPosX, chunkData.globalPosZ);
+                    Destroy(chunk);
+                }
+                else if (chunkData.globalPosX == playerChunkX + newRenderDistance + 1 || chunkData.globalPosX == playerChunkX - newRenderDistance - 1
+                      || chunkData.globalPosZ == playerChunkZ + newRenderDistance + 1 || chunkData.globalPosZ == playerChunkZ - newRenderDistance - 1)
+                {
+                    Transform[] childBlocks = new Transform[chunk.transform.childCount];
+                    for (int j = 0; j < chunk.transform.childCount; j++)
+                        childBlocks[j] = chunk.transform.GetChild(j);
 
-        //             foreach (Transform childBlock in childBlocks)
-        //                 Destroy(childBlock.gameObject);
+                    foreach (Transform childBlock in childBlocks)
+                        Destroy(childBlock.gameObject);
 
-        //             ChunkHelpers.SaveChunkToFile(chunkData.blocks, moon, chunkData.globalPosX, chunkData.globalPosZ);
-        //         }
-        //     }
-        // }
-        // else if (newRenderDistance > renderDistance)
-        // {
-        //     rowRenderTasks.Clear();
-        //     StartCoroutine(ExpandRenderDistance(renderDistance, newRenderDistance));
-        // }
-        // renderDistance = newRenderDistance;
+                    ChunkHelpers.SaveChunkToFile(chunkData.blocks, moon, chunkData.globalPosX, chunkData.globalPosZ);
+                }
+            }
+        }
+        else if (newRenderDistance > renderDistance)
+        {
+            //rowRenderTasks.Clear(); // BAD IDEA
+            StartCoroutine(ExpandRenderDistance(renderDistance, newRenderDistance));
+        }
+        renderDistance = newRenderDistance;
 
-
-        renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
+        //renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
         //renderDistance = 1;
-
 
         // Brown mob exploding
         if (brownMobExploded)
@@ -247,50 +268,52 @@ public class ChunkManager : MonoBehaviour
             // Update chunk data
             GameObject selectedBlock = player.GetSelectedBlock();
             BlockData selectedBlockData = selectedBlock.GetComponent<BlockData>();
-            ChunkData selectedBlockChunkData = selectedBlock.transform.parent.GetComponent<ChunkData>();
-            selectedBlockChunkData.blocks[selectedBlockData.localPosX, selectedBlockData.localPosY, selectedBlockData.localPosZ] = BlockID.air;
-
-            // Drop block item
-            selectedBlock.transform.SetParent(null);
-            if (selectedBlockData.blockID == BlockID.topsoil)
-                selectedBlock.GetComponent<Renderer>().material.SetTexture("_BaseTexture", Resources.Load<Texture2D>("Textures/Blocks/dirt"));
-            Dropped droppedScript = selectedBlock.AddComponent<Dropped>();
-            if (selectedBlockData.blockID.ToString().StartsWith("minilight"))
-                droppedScript.itemID = ItemID.minilight;
-            else
-                droppedScript.itemID = (ItemID)Enum.Parse(typeof(ItemID), selectedBlockData.blockID.ToString());
-            droppedScript.Drop();
-
-            // Add neighboring blocks
-            int selectedGlobalPosX = (int)selectedBlock.transform.position.x;
-            int selectedGlobalPosY = (int)selectedBlock.transform.position.y;
-            int selectedGlobalPosZ = (int)selectedBlock.transform.position.z;
-            Vector3[] neighborGlobalPositions = {
-                new Vector3(selectedGlobalPosX - 1, selectedGlobalPosY, selectedGlobalPosZ),
-                new Vector3(selectedGlobalPosX, selectedGlobalPosY - 1, selectedGlobalPosZ),
-                new Vector3(selectedGlobalPosX, selectedGlobalPosY, selectedGlobalPosZ - 1),
-                new Vector3(selectedGlobalPosX + 1, selectedGlobalPosY, selectedGlobalPosZ),
-                new Vector3(selectedGlobalPosX, selectedGlobalPosY + 1, selectedGlobalPosZ),
-                new Vector3(selectedGlobalPosX, selectedGlobalPosY, selectedGlobalPosZ + 1)
-            };
-            foreach (Vector3 neighborGlobalPos in neighborGlobalPositions)
+            if (selectedBlockData.localPosY != 0)
             {
-                Collider[] hits = Physics.OverlapBox(neighborGlobalPos, new Vector3(0.1F, 0.1F, 0.1F));
-                if (hits.Length == 0) // Neighbor of destroyed block doesn't already exist
-                {
-                    int neighborChunkX = Mathf.FloorToInt(neighborGlobalPos.x / GameData.CHUNK_SIZE);
-                    int neighborChunkZ = Mathf.FloorToInt(neighborGlobalPos.z / GameData.CHUNK_SIZE);
-                    ChunkData neighborChunkData = chunkParent.transform.Find($"Chunk ({neighborChunkX},{neighborChunkZ})").GetComponent<ChunkData>();
-                    (int neighborPosX, int neighborPosY, int neighborPosZ) = ChunkHelpers.GetLocalBlockPos((int)neighborGlobalPos.x, (int)neighborGlobalPos.y, (int)neighborGlobalPos.z);
-                    BlockID neighborBlock = neighborChunkData.blocks[neighborPosX, neighborPosY, neighborPosZ];
-                    if (neighborBlock != BlockID.air)
-                        SpawnBlock(neighborChunkData.gameObject, neighborChunkX, neighborChunkZ, neighborBlock, neighborPosX, neighborPosY, neighborPosZ);
-                        //SpawnBlock(neighborBlock, neighborChunkData.gameObject, neighborLocalPos, new Vector3(neighborChunkX, 0, neighborChunkZ));
-                }
-            }
+                ChunkData selectedBlockChunkData = selectedBlock.transform.parent.GetComponent<ChunkData>();
+                selectedBlockChunkData.blocks[selectedBlockData.localPosX, selectedBlockData.localPosY, selectedBlockData.localPosZ] = BlockID.air;
 
-            // Remove block object
-            player.ResetDestroyedBlock();
+                // Drop block item
+                selectedBlock.transform.SetParent(null);
+                if (selectedBlockData.blockID == BlockID.topsoil)
+                    selectedBlock.GetComponent<Renderer>().material.SetTexture("_BaseTexture", Resources.Load<Texture2D>("Textures/Blocks/dirt"));
+                Dropped droppedScript = selectedBlock.AddComponent<Dropped>();
+                if (selectedBlockData.blockID.ToString().StartsWith("minilight"))
+                    droppedScript.itemID = ItemID.minilight;
+                else
+                    droppedScript.itemID = (ItemID)Enum.Parse(typeof(ItemID), selectedBlockData.blockID.ToString());
+                droppedScript.Drop();
+
+                // Add neighboring blocks
+                int selectedGlobalPosX = (int)selectedBlock.transform.position.x;
+                int selectedGlobalPosY = (int)selectedBlock.transform.position.y;
+                int selectedGlobalPosZ = (int)selectedBlock.transform.position.z;
+                Vector3[] neighborGlobalPositions = {
+                    new Vector3(selectedGlobalPosX - 1, selectedGlobalPosY, selectedGlobalPosZ),
+                    new Vector3(selectedGlobalPosX, selectedGlobalPosY - 1, selectedGlobalPosZ),
+                    new Vector3(selectedGlobalPosX, selectedGlobalPosY, selectedGlobalPosZ - 1),
+                    new Vector3(selectedGlobalPosX + 1, selectedGlobalPosY, selectedGlobalPosZ),
+                    new Vector3(selectedGlobalPosX, selectedGlobalPosY + 1, selectedGlobalPosZ),
+                    new Vector3(selectedGlobalPosX, selectedGlobalPosY, selectedGlobalPosZ + 1)
+                };
+                foreach (Vector3 neighborGlobalPos in neighborGlobalPositions)
+                {
+                    Collider[] hits = Physics.OverlapBox(neighborGlobalPos, new Vector3(0.1F, 0.1F, 0.1F));
+                    if (hits.Length == 0) // Neighbor of destroyed block doesn't already exist
+                    {
+                        int neighborChunkX = Mathf.FloorToInt(neighborGlobalPos.x / GameData.CHUNK_SIZE);
+                        int neighborChunkZ = Mathf.FloorToInt(neighborGlobalPos.z / GameData.CHUNK_SIZE);
+                        ChunkData neighborChunkData = chunkParent.transform.Find($"Chunk ({neighborChunkX},{neighborChunkZ})").GetComponent<ChunkData>();
+                        (int neighborPosX, int neighborPosY, int neighborPosZ) = ChunkHelpers.GetLocalBlockPos((int)neighborGlobalPos.x, (int)neighborGlobalPos.y, (int)neighborGlobalPos.z);
+                        BlockID neighborBlock = neighborChunkData.blocks[neighborPosX, neighborPosY, neighborPosZ];
+                        if (neighborBlock != BlockID.air)
+                            SpawnBlock(neighborChunkData.gameObject, neighborChunkX, neighborChunkZ, neighborBlock, neighborPosX, neighborPosY, neighborPosZ);
+                    }
+                }
+
+                // Remove block object
+                player.ResetDestroyedBlock();
+            }
         }
 
         // Block placing
@@ -306,106 +329,83 @@ public class ChunkManager : MonoBehaviour
                     Vector3 faceNormal = hit.normal;
                     Vector3 newBlockPos = selectedBlockPos + faceNormal;
 
-                    // Check if block is already there
-                    // The player can see through corners if they try, so it's technically possible to select a hidden face
-                    if ((Physics.OverlapBox(newBlockPos, new Vector3(0.5F, 0.5F, 0.5F), Quaternion.identity, LayerMask.GetMask("Block"))).Length == 0)
+                    if (!((faceNormal == Vector3.up && newBlockPos.y == GameData.WORLD_HEIGHT_LIMIT)))
                     {
-
-                        // int mobType = UnityEngine.Random.Range(0, 2);
-
-                        // if (mobType == 0)
-                        // {
-                        //     GameObject greenMob = Instantiate(Resources.Load("Mobs/Green Mob/Green Mob", typeof(GameObject))) as GameObject;
-                        //     greenMob.transform.position = new Vector3(newBlockPos.x, newBlockPos.y + 0.01F, newBlockPos.z);
-                        //     greenMob.AddComponent<GreenMob>();
-                        // }
-                        // else
-                        // {
-                        //     GameObject brownMob = Instantiate(Resources.Load("Mobs/Brown Mob/Brown Mob", typeof(GameObject))) as GameObject;
-                        //     brownMob.transform.position = new Vector3(newBlockPos.x, newBlockPos.y + 0.01F, newBlockPos.z);
-                        //     brownMob.AddComponent<BrownMob>();
-                        // }
-
-                        GameObject blockObj;
-                        BlockData blockData;
-
-                        if (selectedItem.ToString().StartsWith("minilight"))
+                        // Check if block is already there
+                        // The player can see through corners if they try, so it's technically possible to select a hidden face
+                        if ((Physics.OverlapBox(newBlockPos, new Vector3(0.5F, 0.5F, 0.5F), Quaternion.identity, LayerMask.GetMask("Block"))).Length == 0)
                         {
-                            if (faceNormal == Vector3.forward) // minilight_nz
+                            GameObject blockObj;
+                            BlockData blockData;
+
+                            if (selectedItem.ToString().StartsWith("minilight"))
                             {
-                                blockObj = Instantiate(minilight_nz);
-                                blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z - 0.485F);
+                                if (faceNormal == Vector3.forward) // minilight_nz
+                                {
+                                    blockObj = Instantiate(minilight_nz);
+                                    blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z - 0.485F);
+
+                                    blockData = blockObj.AddComponent<BlockData>();
+                                    blockData.blockID = BlockID.minilight_nz;
+                                }
+                                else if (faceNormal == Vector3.back) // minilight_pz
+                                {
+                                    blockObj = Instantiate(minilight_pz);
+                                    blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z + 0.485F);
+
+                                    blockData = blockObj.AddComponent<BlockData>();
+                                    blockData.blockID = BlockID.minilight_pz;
+                                }
+                                else if (faceNormal == Vector3.right) // minilight_nx
+                                {
+                                    blockObj = Instantiate(minilight_nx);
+                                    blockObj.transform.position = new Vector3(newBlockPos.x - 0.485F, newBlockPos.y, newBlockPos.z);
+
+                                    blockData = blockObj.AddComponent<BlockData>();
+                                    blockData.blockID = BlockID.minilight_nx;
+                                }
+                                else // minilight_px (Vector3.left)
+                                {
+                                    blockObj = Instantiate(minilight_px);
+                                    blockObj.transform.position = new Vector3(newBlockPos.x + 0.485F, newBlockPos.y, newBlockPos.z);
+
+                                    blockData = blockObj.AddComponent<BlockData>();
+                                    blockData.blockID = BlockID.minilight_px;
+                                }
+                            }
+                            else
+                            {
+                                blockObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                                blockObj.hideFlags = HideFlags.HideInHierarchy;
+                                blockObj.layer = LayerMask.NameToLayer("Block");
+                                blockObj.GetComponent<MeshFilter>().mesh = blockMesh;
+                                blockObj.GetComponent<Renderer>().material = blockMaterials[(int)selectedBlockID];
+                                blockObj.GetComponent<BoxCollider>().size = new Vector3(0.98F, 0.98F, 0.98F);
+                                blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z);
 
                                 blockData = blockObj.AddComponent<BlockData>();
-                                blockData.blockID = BlockID.minilight_nz;
+                                blockData.blockID = selectedBlockID;
                             }
-                            else if (faceNormal == Vector3.back) // minilight_pz
-                            {
-                                blockObj = Instantiate(minilight_pz);
-                                blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z + 0.485F);
 
-                                blockData = blockObj.AddComponent<BlockData>();
-                                blockData.blockID = BlockID.minilight_pz;
-                            }
-                            else if (faceNormal == Vector3.right) // minilight_nx
-                            {
-                                blockObj = Instantiate(minilight_nx);
-                                blockObj.transform.position = new Vector3(newBlockPos.x - 0.485F, newBlockPos.y, newBlockPos.z);
+                            (int localBlockPosX, int localBlockPosY, int localBlockPosZ) = ChunkHelpers.GetLocalBlockPos(blockObj.transform.position);
+                            blockData.localPosX = localBlockPosX;
+                            blockData.localPosY = localBlockPosY;
+                            blockData.localPosZ = localBlockPosZ;
 
-                                blockData = blockObj.AddComponent<BlockData>();
-                                blockData.blockID = BlockID.minilight_nx;
-                            }
-                            else // minilight_px (Vector3.left)
+                            if (selectedBlockID == BlockID.light)
                             {
-                                blockObj = Instantiate(minilight_px);
-                                blockObj.transform.position = new Vector3(newBlockPos.x + 0.485F, newBlockPos.y, newBlockPos.z);
-
-                                blockData = blockObj.AddComponent<BlockData>();
-                                blockData.blockID = BlockID.minilight_px;
+                                Light light = blockObj.AddComponent<Light>();
+                                light.type = LightType.Point;
                             }
+
+                            // Update parent chunk
+                            (int blockChunkX, int blockChunkZ) = ChunkHelpers.GetChunkCoordsByBlockPos(blockObj.transform.position);
+                            GameObject parentChunk = chunkParent.transform.Find($"Chunk ({blockChunkX},{blockChunkZ})").gameObject;
+                            blockObj.transform.parent = parentChunk.transform;
+                            parentChunk.GetComponent<ChunkData>().blocks[blockData.localPosX, blockData.localPosY, blockData.localPosZ] = blockData.blockID;
+
+                            player.DecrementSelectedItem();
                         }
-                        else
-                        {
-                            blockObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                            blockObj.hideFlags = HideFlags.HideInHierarchy;
-                            blockObj.layer = LayerMask.NameToLayer("Block");
-                            blockObj.GetComponent<MeshFilter>().mesh = blockMesh;
-                            blockObj.GetComponent<Renderer>().material = blockMaterials[(int)selectedBlockID];
-                            blockObj.GetComponent<BoxCollider>().size = new Vector3(0.98F, 0.98F, 0.98F);
-                            blockObj.transform.position = new Vector3(newBlockPos.x, newBlockPos.y, newBlockPos.z);
-
-                            blockData = blockObj.AddComponent<BlockData>();
-                            blockData.blockID = selectedBlockID;
-                        }
-
-                        (int localBlockPosX, int localBlockPosY, int localBlockPosZ) = ChunkHelpers.GetLocalBlockPos(blockObj.transform.position);
-                        blockData.localPosX = localBlockPosX;
-                        blockData.localPosY = localBlockPosY;
-                        blockData.localPosZ = localBlockPosZ;
-
-                        if (selectedBlockID == BlockID.light)
-                        {
-                            Light light = blockObj.AddComponent<Light>();
-                            light.type = LightType.Point;
-                        }
-
-                        // Update parent chunk
-                        (int blockChunkX, int blockChunkZ) = ChunkHelpers.GetChunkCoordsByBlockPos(blockObj.transform.position);
-                        GameObject parentChunk = chunkParent.transform.Find($"Chunk ({blockChunkX},{blockChunkZ})").gameObject;
-                        blockObj.transform.parent = parentChunk.transform;
-                        parentChunk.GetComponent<ChunkData>().blocks[blockData.localPosX, blockData.localPosY, blockData.localPosZ] = blockData.blockID;
-                        // foreach (GameObject chunk in GameObject.FindGameObjectsWithTag("Chunk"))
-                        // {
-                        //     ChunkData chunkData = chunk.GetComponent<ChunkData>();
-                        //     if (chunkData.globalPosX == blockChunkX && chunkData.globalPosZ == blockChunkZ)
-                        //     {
-                        //         blockObj.transform.parent = chunk.transform;
-                        //         chunkData.blocks[blockData.localPosX, blockData.localPosY, blockData.localPosZ] = selectedBlockID;
-                        //         break;
-                        //     }
-                        // }
-
-                        player.DecrementSelectedItem();
                     }
                 }
             }
@@ -420,9 +420,7 @@ public class ChunkManager : MonoBehaviour
             RowRenderTask task = new RowRenderTask();
             task.finished = false;
             task.direction = (newPlayerChunkX - playerChunkX == 1) ? XZDirection.POSITIVE_X : XZDirection.NEGATIVE_X;
-            //task.globalCenterCoordX = (task.direction == XZDirection.POSITIVE_X) ? newPlayerChunkX + renderDistance : newPlayerChunkX - renderDistance;
             task.newPlayerChunkX = newPlayerChunkX;
-            //task.globalCenterCoordZ = playerChunkZ;
             task.newPlayerChunkZ = newPlayerChunkZ;
             rowRenderTasks.Enqueue(task);
 
@@ -435,9 +433,7 @@ public class ChunkManager : MonoBehaviour
             RowRenderTask task = new RowRenderTask();
             task.finished = false;
             task.direction = (newPlayerChunkZ - playerChunkZ == 1) ? XZDirection.POSITIVE_Z : XZDirection.NEGATIVE_Z;
-            //task.globalCenterCoordX = playerChunkX;
             task.newPlayerChunkX = newPlayerChunkX;
-            //task.globalCenterCoordZ = (task.direction == XZDirection.POSITIVE_Z) ? newPlayerChunkZ + renderDistance : newPlayerChunkZ - renderDistance;
             task.newPlayerChunkZ = newPlayerChunkZ;
             rowRenderTasks.Enqueue(task);
 
@@ -466,46 +462,46 @@ public class ChunkManager : MonoBehaviour
     private IEnumerator ExpandRenderDistance(int oldRenderDistance, int newRenderDistance)
     {
         // Create and prepare chunk objects
-        for (int globalChunkX = playerChunkX - newRenderDistance - 1; globalChunkX <= playerChunkX + newRenderDistance + 1; globalChunkX++)
+        for (int chunkX = playerChunkX - newRenderDistance - 1; chunkX <= playerChunkX + newRenderDistance + 1; chunkX++)
         {
-            for (int globalChunkZ = playerChunkZ - newRenderDistance - 1; globalChunkZ <= playerChunkZ + newRenderDistance + 1; globalChunkZ++)
+            for (int chunkZ = playerChunkZ - newRenderDistance - 1; chunkZ <= playerChunkZ + newRenderDistance + 1; chunkZ++)
             {
-                if (globalChunkX < playerChunkX - oldRenderDistance - 1 || globalChunkX > playerChunkX + oldRenderDistance + 1
-                 || globalChunkZ < playerChunkZ - oldRenderDistance - 1 || globalChunkZ > playerChunkZ + oldRenderDistance + 1)
+                if (chunkX < playerChunkX - oldRenderDistance - 1 || chunkX > playerChunkX + oldRenderDistance + 1
+                 || chunkZ < playerChunkZ - oldRenderDistance - 1 || chunkZ > playerChunkZ + oldRenderDistance + 1)
                 {
-                    GameObject chunk = new GameObject("Chunk");
+                    GameObject chunk = new GameObject($"Chunk ({chunkX},{chunkZ})");
+                    chunk.transform.SetParent(chunkParent.transform);
                     chunk.tag = "Chunk";
                     ChunkData chunkData = chunk.AddComponent<ChunkData>();
-                    chunkData.globalPosX = globalChunkX;
-                    chunkData.globalPosZ = globalChunkZ;
+                    chunkData.globalPosX = chunkX;
+                    chunkData.globalPosZ = chunkZ;
                     chunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT, GameData.CHUNK_SIZE];
-                    if (!ChunkHelpers.ChunkFileExists(moon, globalChunkX, globalChunkZ))
+                    if (!ChunkHelpers.ChunkFileExists(moon, chunkX, chunkZ))
                     {
-                        ChunkHelpers.GenerateChunk(chunkData.blocks, globalChunkX, globalChunkZ, moonData);
-                        ChunkHelpers.SaveChunkToFile(chunkData.blocks, moon, globalChunkX, globalChunkZ);
+                        ChunkHelpers.GenerateChunk(chunkData.blocks, chunkX, chunkZ, moonData);
+                        ChunkHelpers.SaveChunkToFile(chunkData.blocks, moon, chunkX, chunkZ);
                     }
                     else
                     {
-                        ChunkHelpers.GetChunkFromFile(chunkData.blocks, moon, globalChunkX, globalChunkZ);
+                        ChunkHelpers.GetChunkFromFile(chunkData.blocks, moon, chunkX, chunkZ);
                     }
                 }
             }
         }
 
         // Render
-        GameObject[] chunkObjects = GameObject.FindGameObjectsWithTag("Chunk");
         ChunkData[] adjacentChunkData;
-        foreach (GameObject chunkObj in chunkObjects)
+        for (int chunkX = playerChunkX - newRenderDistance; chunkX <= playerChunkX + newRenderDistance; chunkX++)
         {
-            if (chunkObj != null)
+            for (int chunkZ = playerChunkZ - newRenderDistance; chunkZ <= playerChunkZ + newRenderDistance; chunkZ++)
             {
-                ChunkData chunkData = chunkObj.GetComponent<ChunkData>();
                 if (
-                    Mathf.Abs(chunkData.globalPosX - playerChunkX) < newRenderDistance + 1 && Mathf.Abs(chunkData.globalPosZ - playerChunkZ) < newRenderDistance + 1
-                && (Mathf.Abs(chunkData.globalPosX - playerChunkX) > oldRenderDistance || Mathf.Abs(chunkData.globalPosZ - playerChunkZ) > oldRenderDistance))
+                    Mathf.Abs(chunkX - playerChunkX) < newRenderDistance + 1 && Mathf.Abs(chunkZ - playerChunkZ) < newRenderDistance + 1
+                && (Mathf.Abs(chunkX - playerChunkX) > oldRenderDistance || Mathf.Abs(chunkZ - playerChunkZ) > oldRenderDistance))
                 {
-                    adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(chunkParent, chunkData.globalPosX, chunkData.globalPosZ);
-                    //Vector3 globalChunkPosition = new Vector3(chunkData.globalPosX, 0, chunkData.globalPosZ);
+                    GameObject chunkObj = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})").gameObject;
+                    ChunkData chunkData = chunkObj.GetComponent<ChunkData>();
+                    adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(chunkParent, chunkX, chunkZ);
                     for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
                     {
                         for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
@@ -513,12 +509,8 @@ public class ChunkManager : MonoBehaviour
                             for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
                             {
                                 BlockID block = chunkData.blocks[localBlockX, localBlockY, localBlockZ];
-                                //Vector3 localBlockPosition = new Vector3(localBlockX, localBlockY, localBlockZ);
                                 if (block != BlockID.air && ChunkHelpers.BlockShouldBeRendered(block, adjacentChunkData, chunkData, localBlockX, localBlockY, localBlockZ))
-                                {
-                                    //SpawnBlock(block, chunkObj, localBlockPosition, globalChunkPosition);
-                                    SpawnBlock(chunkObj, chunkData.globalPosX, chunkData.globalPosZ, block, localBlockX, localBlockY, localBlockZ);
-                                }
+                                    SpawnBlock(chunkObj, chunkX, chunkZ, block, localBlockX, localBlockY, localBlockZ);
                             }
                         }
                         yield return null;
@@ -562,7 +554,6 @@ public class ChunkManager : MonoBehaviour
                     newDistantRenderedChunkData.globalPosX = distantRenderedChunkData.globalPosX;
                     newDistantRenderedChunkData.globalPosZ = distantRenderedChunkData.globalPosZ;
                     newDistantRenderedChunkData.blocks = distantRenderedChunkData.blocks;
-                    //ChunkHelpers.GetChunkFromFile(newOldChunkData.blocks, moon, newOldChunkData.globalPosX, newOldChunkData.globalPosZ); // We know this chunk file exists
                     yield return null;
                 }
 
@@ -577,7 +568,6 @@ public class ChunkManager : MonoBehaviour
                 if (!ChunkHelpers.ChunkFileExists(moon, borderChunkX, chunkZ))
                 {
                     ChunkHelpers.GenerateChunk(borderChunkData.blocks, borderChunkX, chunkZ, moonData);
-                    //ChunkHelpers.SaveChunkToFile(borderChunkData.blocks, moon, borderChunkX, chunkZ);
                 }
                 else
                 {
@@ -620,105 +610,47 @@ public class ChunkManager : MonoBehaviour
             }
 
             // Spawn mobs
-            // for (int chunkZ = playerChunkZ - renderDistance; chunkZ <= playerChunkZ + renderDistance; chunkZ++)
-            // {
-            //     Transform chunkTransform = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})");
-            //     MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
-            //     if (mobs != null)
-            //     {
-            //         foreach (MobData mobData in mobs)
-            //         {
-            //             if (mobData == null)
-            //             {
-            //                 Debug.Log("NULL MOB DATA");
-            //                 continue;
-            //             }
+            for (int chunkZ = playerChunkZ - renderDistance; chunkZ <= playerChunkZ + renderDistance; chunkZ++)
+            {
+                Transform chunkTransform = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})");
+                MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
+                if (mobs != null)
+                {
+                    foreach (MobData mobData in mobs)
+                    {
+                        if (mobData == null)
+                        {
+                            Debug.Log("NULL MOB DATA");
+                            continue;
+                        }
 
-            //             Vector3 mobPosition = new Vector3(
-            //                 mobData.positionX,
-            //                 mobData.positionY,
-            //                 mobData.positionZ
-            //             );
-            //             Quaternion mobRotation = Quaternion.Euler(
-            //                 0,
-            //                 mobData.rotationY,
-            //                 0
-            //             );
+                        Vector3 mobPosition = new Vector3(
+                            mobData.positionX,
+                            mobData.positionY,
+                            mobData.positionZ
+                        );
+                        Quaternion mobRotation = Quaternion.Euler(
+                            0,
+                            mobData.rotationY,
+                            0
+                        );
 
-            //             if (mobData.mobID == 0) // Green mob
-            //             {
-            //                 GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunkTransform);
-            //             }
-            //             else if (mobData.mobID == 1) // Brown mob
-            //             {
-            //                 GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunkTransform);
-            //                 mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
-            //             }
-            //             else if (mobData.mobID == 2) // Space giraffe
-            //             {
-            //                 GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunkTransform);
-            //             }
-            //         }
-            //     }
-            // }
-
-            // int globalChunkX = currentRowRenderTask.globalCenterCoordX;
-            // int globalCenterCoordZ = currentRowRenderTask.globalCenterCoordZ;
-
-            // int outerChunkX = (moveDirection == XZDirection.POSITIVE_X) ? globalChunkX + 1 : globalChunkX - 1;
-            // GameObject[] chunkObjects = GameObject.FindGameObjectsWithTag("Chunk");
-            // ChunkData[] adjacentChunkData;
-            // for (int globalChunkZ = globalCenterCoordZ - renderDistance - 1; globalChunkZ <= globalCenterCoordZ + renderDistance + 1; globalChunkZ++)
-            // {
-            //     // Create next pre-prepared chunk row
-            //     GameObject chunk = new GameObject($"Chunk ({outerChunkX},{globalChunkZ})");
-            //     chunk.tag = "Chunk";
-            //     ChunkData chunkData = chunk.AddComponent<ChunkData>();
-            //     chunkData.globalPosX = outerChunkX;
-            //     chunkData.globalPosZ = globalChunkZ;
-            //     chunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT, GameData.CHUNK_SIZE];
-            //     if (!ChunkHelpers.ChunkFileExists(moon, outerChunkX, globalChunkZ))
-            //     {
-            //         ChunkHelpers.GenerateChunk(chunkData.blocks, outerChunkX, globalChunkZ, moonData);
-            //         ChunkHelpers.SaveChunkToFile(chunkData.blocks, moon, outerChunkX, globalChunkZ);
-            //     }
-            //     else
-            //     {
-            //         ChunkHelpers.GetChunkFromFile(chunkData.blocks, moon, outerChunkX, globalChunkZ);
-            //     }
-
-                // Render current pre-prepared chunk row
-                // foreach (GameObject chunkObject in chunkObjects)
-                // {
-                //     // When UnloadDistantChunks() destroys chunk objects, Unity sets them to null and doesn't immediately remove them.
-                //     // The 0 check is to ensure blocks aren't duplicated
-                //     if (chunkObject != null && chunkObject.transform.childCount == 0)
-                //     {
-                //         ChunkData _chunkData = chunkObject.GetComponent<ChunkData>();
-                //         if (_chunkData.globalPosX == globalChunkX && _chunkData.globalPosZ == globalChunkZ && globalChunkZ > globalCenterCoordZ - renderDistance - 1 && globalChunkZ < globalCenterCoordZ + renderDistance + 1)
-                //         {
-                //             adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(globalChunkX, globalChunkZ);
-                //             Vector3 globalChunkPosition = new Vector3(globalChunkX, 0, globalChunkZ);
-                //             for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
-                //             {
-                //                 for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
-                //                 {
-                //                     for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
-                //                     {
-                //                         BlockID block = _chunkData.blocks[localBlockX, localBlockY, localBlockZ];
-                //                         Vector3 localBlockPosition = new Vector3(localBlockX, localBlockY, localBlockZ);
-                //                         if (block != BlockID.air && ChunkHelpers.BlockShouldBeRendered(block, adjacentChunkData, _chunkData, localBlockPosition))
-                //                         {
-                //                             SpawnBlock(block, chunkObject, localBlockPosition, globalChunkPosition);
-                //                         }
-                //                     }
-                //                 }
-                //                 yield return null;
-                //             }
-                //         }
-                //     }
-                // }
-            // }
+                        if (mobData.mobID == 0) // Green mob
+                        {
+                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                        else if (mobData.mobID == 1) // Brown mob
+                        {
+                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunkTransform);
+                            mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
+                        }
+                        else if (mobData.mobID == 2) // Space giraffe
+                        {
+                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                    }
+                }
+            }
         }
         else // Moving along z axis
         {
@@ -802,107 +734,47 @@ public class ChunkManager : MonoBehaviour
             }
 
             // Spawn mobs
-            // for (int chunkX = playerChunkX - renderDistance; chunkX <= playerChunkX + renderDistance; chunkX++)
-            // {
-            //     Transform chunkTransform = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})");
-            //     MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
-            //     if (mobs != null)
-            //     {
-            //         foreach (MobData mobData in mobs)
-            //         {
-            //             if (mobData == null)
-            //             {
-            //                 Debug.Log("NULL MOB DATA");
-            //                 continue;
-            //             }
+            for (int chunkX = playerChunkX - renderDistance; chunkX <= playerChunkX + renderDistance; chunkX++)
+            {
+                Transform chunkTransform = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})");
+                MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
+                if (mobs != null)
+                {
+                    foreach (MobData mobData in mobs)
+                    {
+                        if (mobData == null)
+                        {
+                            Debug.Log("NULL MOB DATA");
+                            continue;
+                        }
 
-            //             Vector3 mobPosition = new Vector3(
-            //                 mobData.positionX,
-            //                 mobData.positionY,
-            //                 mobData.positionZ
-            //             );
-            //             Quaternion mobRotation = Quaternion.Euler(
-            //                 0,
-            //                 mobData.rotationY,
-            //                 0
-            //             );
+                        Vector3 mobPosition = new Vector3(
+                            mobData.positionX,
+                            mobData.positionY,
+                            mobData.positionZ
+                        );
+                        Quaternion mobRotation = Quaternion.Euler(
+                            0,
+                            mobData.rotationY,
+                            0
+                        );
 
-            //             if (mobData.mobID == 0) // Green mob
-            //             {
-            //                 GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunkTransform);
-            //             }
-            //             else if (mobData.mobID == 1) // Brown mob
-            //             {
-            //                 GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunkTransform);
-            //                 mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
-            //             }
-            //             else if (mobData.mobID == 2) // Space giraffe
-            //             {
-            //                 GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunkTransform);
-            //             }
-            //         }
-            //     }
-            // }
-
-            // Generate (globalCenterCoordX - renderDistance, globalCenterCoordZ) ... (globalCenterCoordX + renderDistance, globalCenterCoordZ)
-            // int globalCenterCoordX = currentRowRenderTask.globalCenterCoordX;
-            // int globalChunkZ = currentRowRenderTask.globalCenterCoordZ;
-
-            // int outerChunkZ = (moveDirection == XZDirection.POSITIVE_Z) ? globalChunkZ + 1 : globalChunkZ - 1;
-            // GameObject[] chunkObjects = GameObject.FindGameObjectsWithTag("Chunk");
-            // ChunkData[] adjacentChunkData;
-            // for (int globalChunkX = globalCenterCoordX - renderDistance - 1; globalChunkX <= globalCenterCoordX + renderDistance + 1; globalChunkX++)
-            // {
-            //     // Create next pre-prepared chunk row
-            //     GameObject chunk = new GameObject($"Chunk ({globalChunkX},{globalChunkZ})");
-            //     chunk.tag = "Chunk";
-            //     ChunkData chunkData = chunk.AddComponent<ChunkData>();
-            //     chunkData.globalPosX = globalChunkX;
-            //     chunkData.globalPosZ = outerChunkZ;
-            //     chunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT, GameData.CHUNK_SIZE];
-
-            //     if (!ChunkHelpers.ChunkFileExists(moon, globalChunkX, outerChunkZ))
-            //     {
-            //         ChunkHelpers.GenerateChunk(chunkData.blocks, globalChunkX, outerChunkZ, moonData);
-            //         ChunkHelpers.SaveChunkToFile(chunkData.blocks, moon, globalChunkX, outerChunkZ);
-            //     }
-            //     else
-            //     {
-            //         ChunkHelpers.GetChunkFromFile(chunkData.blocks, moon, globalChunkX, outerChunkZ);
-            //     }
-
-            //     // Render current pre-prepared chunk row
-            //     foreach (GameObject chunkObject in chunkObjects)
-            //     {
-            //         // When UnloadDistantChunks() destroys chunk objects, Unity sets them to null and doesn't immediately remove them.
-            //         // The 0 check is to ensure blocks aren't duplicated
-            //         if (chunkObject != null && chunkObject.transform.childCount == 0)
-            //         {
-            //             ChunkData _chunkData = chunkObject.GetComponent<ChunkData>();
-            //             if (_chunkData.globalPosZ == globalChunkZ && _chunkData.globalPosX == globalChunkX && globalChunkX > globalCenterCoordX - renderDistance - 1 && globalChunkX < globalCenterCoordX + renderDistance + 1)
-            //             {
-            //                 adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(globalChunkX, globalChunkZ);
-            //                 Vector3 globalChunkPosition = new Vector3(globalChunkX, 0, globalChunkZ);
-            //                 for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
-            //                 {
-            //                     for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
-            //                     {
-            //                         for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
-            //                         {
-            //                             BlockID block = _chunkData.blocks[localBlockX, localBlockY, localBlockZ];
-            //                             Vector3 localBlockPosition = new Vector3(localBlockX, localBlockY, localBlockZ);
-            //                             if (block != BlockID.air && ChunkHelpers.BlockShouldBeRendered(block, adjacentChunkData, _chunkData, localBlockPosition))
-            //                             {
-            //                                 SpawnBlock(block, chunkObject, localBlockPosition, globalChunkPosition);
-            //                             }
-            //                         }
-            //                     }
-            //                     yield return null;
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
+                        if (mobData.mobID == 0) // Green mob
+                        {
+                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                        else if (mobData.mobID == 1) // Brown mob
+                        {
+                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunkTransform);
+                            mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
+                        }
+                        else if (mobData.mobID == 2) // Space giraffe
+                        {
+                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunkTransform);
+                        }
+                    }
+                }
+            }
         }
 
         currentRowRenderTask.finished = true;
