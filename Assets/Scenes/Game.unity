@@ -11459,7 +11459,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Lunacraft (indev)
+  m_text: Lunacraft
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: ba0bf8975ee03ce40871812fbb485e56, type: 2}
   m_sharedMaterial: {fileID: 8289313940051880478, guid: ba0bf8975ee03ce40871812fbb485e56,
@@ -17470,6 +17470,8 @@ MonoBehaviour:
   minilight_px: {fileID: 619447668738818906, guid: d6b77fa678a8f2b4d9b6161d7302b37e,
     type: 3}
   minilight_nx: {fileID: 8708857371224890886, guid: e08312fac16ae6c42be103977c66b311,
+    type: 3}
+  blockPrefab: {fileID: 1475844500732896709, guid: 1d9e50e8052404143b07a69358f0666b,
     type: 3}
 --- !u!1 &1684754443
 GameObject:
