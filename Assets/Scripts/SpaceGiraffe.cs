@@ -130,9 +130,14 @@ public class SpaceGiraffe : MonoBehaviour
                     // Rotate
                     rigidbody.constraints = RigidbodyConstraints.None;
                     if (transform.eulerAngles.z - 90 < 0.5F)
+                    {
                         transform.RotateAround(transform.position + 1.5F*Vector3.down, transform.forward, 90 * Time.deltaTime);
+                    }
                     else
+                    {
                         deathAnimationFinished = true;
+                        rigidbody.constraints = RigidbodyConstraints.FreezeRotation;
+                    }
                 }
                 else if (Time.time - timeDied > 3)
                 {

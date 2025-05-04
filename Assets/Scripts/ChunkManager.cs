@@ -66,6 +66,8 @@ public class ChunkManager : MonoBehaviour
     public GameObject minilight_px;
     public GameObject minilight_nx;
 
+    public GameObject blockPrefab;
+
     void Awake()
     {
         blockMesh = MeshData.GetBlockMesh();
@@ -785,38 +787,31 @@ public class ChunkManager : MonoBehaviour
 
     // SpawnBlock(chunk, chunkX, chunkZ, block, localBlockX, localBlockY, localBlockZ)
     //private void SpawnBlock(BlockID block, GameObject parentChunk, Vector3 localBlockPosition, Vector3 globalChunkPosition)
+    /*
+        5.81 ms
+            - CreatePrimitive - 3.20 ms
+            - AddComponent (BlockData) - 1.13 ms
+            - SetParent (parentChunk) - 0.43 ms
+    */
     private void SpawnBlock(GameObject parentChunk, int chunkX, int chunkZ, BlockID block, int localBlockX, int localBlockY, int localBlockZ)
     {
-        GameObject blockObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        blockObj.hideFlags = HideFlags.HideInHierarchy;
-        blockObj.layer = LayerMask.NameToLayer("Block");
-        blockObj.GetComponent<MeshFilter>().mesh = blockMesh;
+        Vector3 globalPosition = new Vector3(
+            (chunkX*GameData.CHUNK_SIZE + localBlockX), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ)
+        );
+        GameObject blockObj = Instantiate(blockPrefab, globalPosition, Quaternion.identity, parentChunk.transform);
         blockObj.GetComponent<Renderer>().material = blockMaterials[(int)block];
-        blockObj.GetComponent<BoxCollider>().size = new Vector3(0.95F, 0.95F, 0.95F);
 
-        BlockData blockData = blockObj.AddComponent<BlockData>();
+        BlockData blockData = blockObj.GetComponent<BlockData>();
         blockData.blockID = block;
         blockData.localPosX = localBlockX;
         blockData.localPosY = localBlockY;
         blockData.localPosZ = localBlockZ;
-
-        blockObj.transform.position = new Vector3(
-            (chunkX*GameData.CHUNK_SIZE + localBlockX), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ)
-        );
-        blockObj.transform.SetParent(parentChunk.transform);
 
         if (block == BlockID.light)
         {
             Light light = blockObj.AddComponent<Light>();
             light.type = LightType.Point;
         }
-
-        // if (block == BlockID.water)
-        // {
-        //     PhysicsMaterial physMat = blockObj.GetComponent<BoxCollider>().material;
-        //     physMat.staticFriction = 0.2F;
-        //     physMat.dynamicFriction = 0.2F;
-        // }
     }
 
     private void UnloadDistantChunks(XZDirection moveDirection, int newPlayerChunkX, int newPlayerChunkZ)

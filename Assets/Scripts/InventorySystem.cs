@@ -198,6 +198,12 @@ public class InventorySystem
     public Spacesuit spacesuit;
     public Assembler assembler;
     public int selectedHotbarSlot;
+    private static List<ItemID> stackableItems = new List<ItemID> {
+        ItemID.drill_t1, ItemID.drill_t2, ItemID.drill_t3,
+        ItemID.slug_pistol_t1, ItemID.slug_pistol_t2, ItemID.slug_pistol_t3,
+        ItemID.jetpack_t1, ItemID.jetpack_t2, ItemID.jetpack_t3,
+        ItemID.camera, ItemID.chronobooster, ItemID.chronowinder, ItemID.medkit
+    };
 
     public InventorySystem(bool creativeMode)
     {
@@ -224,7 +230,6 @@ public class InventorySystem
 
     public static bool ItemIsStackable(ItemID itemID)
     {
-        string itemName = itemID.ToString();
-        return !(itemName.StartsWith("disk") || itemName.StartsWith("drill") || itemName.StartsWith("slug") || itemName.StartsWith("jet") || itemName == "camera" || itemName == "chronobooster" || itemName == "chronowinder" || itemName == "medkit");
+        return !(itemID.ToString().StartsWith("disk") || stackableItems.Contains(itemID));
     }
 }

@@ -33,7 +33,6 @@ class BrownMob : MonoBehaviour
         rigidbody.mass = 0.5F;
         rigidbody.angularDamping = 0;
         rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-        rigidbody.collisionDetectionMode = CollisionDetectionMode.Continuous;
     }
 
     void Update()

@@ -1327,7 +1327,7 @@ public class ChunkHelpers
         //
         // Trees
         //
-        int numberOfTrees = UnityEngine.Random.Range(0, moonData.treeCover + 1);
+        int numberOfTrees = UnityEngine.Random.Range(0, moonData.treeCover);
         for (int i = 0; i < numberOfTrees; i++)
         {
             int treeType = UnityEngine.Random.Range(0, 10);

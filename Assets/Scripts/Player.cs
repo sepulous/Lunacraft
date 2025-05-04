@@ -199,7 +199,7 @@ public class Player : MonoBehaviour
             using (FileStream fileStream = new FileStream(playerDataPath, FileMode.Create, FileAccess.Write))
                 (new BinaryFormatter()).Serialize(fileStream, playerData);
 
-            //invTip.SetActive(true);
+            invTip.SetActive(true);
         }
         else
         {
@@ -463,7 +463,7 @@ public class Player : MonoBehaviour
             // Toggle inventory
             if (Input.GetKeyDown(KeyCode.E) && !pauseMenu.IsPaused())
             {
-                //invTip.SetActive(false);
+                invTip.SetActive(false);
 
                 if (inventoryUI.activeSelf)
                 {
@@ -474,6 +474,7 @@ public class Player : MonoBehaviour
                 {
                     Cursor.lockState = CursorLockMode.None;
                     Cursor.visible = true;
+                    UpdateInventoryUI();
                 }
 
                 inventoryUI.SetActive(!inventoryUI.activeSelf);
@@ -496,6 +497,7 @@ public class Player : MonoBehaviour
                         CancelAllAnimations();
                         drillPowerupSource.Stop();
                         drillingSource.Stop();
+                        UpdateInventoryUI();
 
                         break;
                     }
@@ -519,9 +521,11 @@ public class Player : MonoBehaviour
                         else
                             inventorySystem.selectedHotbarSlot--;
                     }
+
                     CancelAllAnimations();
                     drillPowerupSource.Stop();
                     drillingSource.Stop();
+                    UpdateInventoryUI();
                 }
             }
 
@@ -596,6 +600,7 @@ public class Player : MonoBehaviour
                 selectedSlot.amount--;
                 if (selectedSlot.amount == 0)
                     selectedSlot.itemID = ItemID.none;
+                UpdateInventoryUI();
             }
 
             // Moving items around inventory
@@ -857,10 +862,9 @@ public class Player : MonoBehaviour
                             }
                         }
                     }
+                    UpdateInventoryUI();
                 }
             }
-
-            UpdateInventoryUI();
         }
     }
 
