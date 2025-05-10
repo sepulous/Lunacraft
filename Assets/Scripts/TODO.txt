@@ -78,18 +78,6 @@ for (int i = 0; i < output.Length; i++)
 
 
 
-
-WebGL Build:
-    [ ] Fix render distance to 1
-    [ ] Force fog on and remove option (and bring it closer to hide low render distance)
-    [ ] Remove top right main menu text
-    [ ] Remove minilights
-    [ ] Add "'E' to open inventory" message when moon is first loaded
-    [ ] Change pause menu key to tab
-
-
-
-
 * Added minilights
 * Fixed some tree bugs
 
@@ -100,7 +88,87 @@ Rendering ideas:
 
 
 
-index = x + sizeX * (y + sizeY * z);
+Profiling
+-----------------------------
+
+When not generating, it's even with periodic spikes
+    * Even
+        - PlayerLoop [51.5%]
+            - RenderPipelineManager.DoRenderLoop_Internal() [41.1%]
+            - Update() [4.6%]
+            - FixedUpdate.PhysicsFixedUpdate() [4.5%]
+
+        Lesson: When nothing is happening, most of the execution (CPU) is for rendering
+
+    * Spikes
+        - These seem to be purely due to the EditorLoop shooting up. Good.
+
+
+When generating, there's an initial lag spike, and then reduced FPS due to rendering
+    * Initial lag spike
+        - ChunkHelpers.GenerateChunk() [40.8%]
+            - Object.ElementAddr_1() takes up almost all the time
+        - ChunkHelpers.SaveChunkToFile() [32.9%]
+            - Object.ElementAddr_1() takes up almost all the time
+
+    * While rendering
+        - ChunkManager.SpawnBlock() [8.3%]
+            - Object.Instantiate() takes up almost all the time
+        - ChunkHelpers.BlockShouldBeRendered() [5.8%]
+            - Object.ElementAddr_1() takes up almost all the time
+        - ChunkHelpers.BlockShouldBeRenderedINNER() [5.7%]
+            - Object.ElementAddr_1() takes up almost all the time
+
+
+MobHelpers.GetMobsInChunk() takes 25.63ms. Terrible.
+
+
+
+New change: GenerateChunk() loops through the middle index in the innermost loop, since I'm doing chunk[x,y,z].
+            It's more cache efficient for the innermost loop to go over the last index, so change this
+            to chunk[x,z,y]
+
+
+    
+* Raising the starting y-level when rendering brought the average execution time for RenderNewRow from 4.3ms -> 2.8ms (65%)
+    - Shouldn't expect a huge boost, as this only affects the checking of whether to spawn a block. The real bottleneck
+      is the spawning. But I'll take as many milliseconds as I can get.
+
+
+* Instantiating a block prefab instead of constructing everything from scratch brought the average execution time
+  of SpawnBlock from 5.45ms -> 2.5ms (46%)
+
+
+
+TODO:
+    * Spread out calls to GenerateChunk so they don't all happen at once
+        - Many small lag spikes instead of one huge one
+            - Big lag spike lasts about 14 frames
+        - Don't yield right after calling GenerateChunk. Do more work first.
+
+    * Instantiate() takes most time in SpawnBlock()
+        - Test object pooling (more rigorously this time). Have SpawnBlock use the object pool. This won't have any effect for the
+        first row, so check the second and third rows.
+
+
+
+
+SpawnBlock time
+
+NO POOLING
+---------------
+    2nd row: 1.45, 1.56, 1.82, 2.88, 2.44, 3.11
+    3rd row: 1.33, 1.58, 1.28, 1.34, 1.86, 2.42
+
+WITH POOLING (not pre-filled)
+---------------
+    2nd row: 0.73, 0.74, 0.97, 3.6, 3.48, 3.47
+    3rd row: 0.73, 1.4, 1.83, 1.52, 2.96, 2.65
+
+WITH POOLING (pre-filled)
+---------------
+    2nd row: 
+    3rd row: 
 
 
 

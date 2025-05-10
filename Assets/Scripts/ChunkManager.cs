@@ -151,7 +151,6 @@ public class ChunkManager : MonoBehaviour
         renderDistance = newRenderDistance;
 
         //renderDistance = OptionsManager.GetCurrentOptions().renderDistance;
-        //renderDistance = 1;
 
         // Brown mob exploding
         if (brownMobExploded)
@@ -182,7 +181,7 @@ public class ChunkManager : MonoBehaviour
                 int parentChunkZ = Mathf.FloorToInt(hitBlockGlobalPos.z / GameData.CHUNK_SIZE);
                 ChunkData parentChunkData = chunkParent.transform.Find($"Chunk ({parentChunkX},{parentChunkZ})").GetComponent<ChunkData>();
                 (int hitBlockPosX, int hitBlockPosY, int hitBlockPosZ) = ChunkHelpers.GetLocalBlockPos((int)hitBlockGlobalPos.x, (int)hitBlockGlobalPos.y, (int)hitBlockGlobalPos.z);
-                BlockID hitBlockID = parentChunkData.blocks[hitBlockPosX, hitBlockPosY, hitBlockPosZ];
+                BlockID hitBlockID = parentChunkData.blocks[hitBlockPosX, hitBlockPosZ, hitBlockPosY];
 
                 if (hitBlockID != BlockID.air)
                 {
@@ -197,7 +196,7 @@ public class ChunkManager : MonoBehaviour
                             blockToDrop = alchemyProduct;
 
                         // Drop
-                        parentChunkData.blocks[hitBlockPosX, hitBlockPosY, hitBlockPosZ] = BlockID.air;
+                        parentChunkData.blocks[hitBlockPosX, hitBlockPosZ, hitBlockPosY] = BlockID.air;
 
                         GameObject hitBlock;
                         Collider[] hits = Physics.OverlapBox(hitBlockGlobalPos, new Vector3(0.1F, 0.1F, 0.1F), Quaternion.identity, LayerMask.GetMask("Block"));
@@ -250,7 +249,7 @@ public class ChunkManager : MonoBehaviour
                         int neighborChunkZ = Mathf.FloorToInt(neighborGlobalPos.z / GameData.CHUNK_SIZE);
                         ChunkData neighborChunkData = chunkParent.transform.Find($"Chunk ({neighborChunkX},{neighborChunkZ})").GetComponent<ChunkData>();
                         (int neighborPosX, int neighborPosY, int neighborPosZ) = ChunkHelpers.GetLocalBlockPos((int)neighborGlobalPos.x, (int)neighborGlobalPos.y, (int)neighborGlobalPos.z);
-                        BlockID neighborBlock = neighborChunkData.blocks[neighborPosX, neighborPosY, neighborPosZ];
+                        BlockID neighborBlock = neighborChunkData.blocks[neighborPosX, neighborPosZ, neighborPosY];
                         if (neighborBlock != BlockID.air)
                         {
                             blocksBroughtBack.Add(neighborGlobalPos);
@@ -273,7 +272,7 @@ public class ChunkManager : MonoBehaviour
             if (selectedBlockData.localPosY != 0)
             {
                 ChunkData selectedBlockChunkData = selectedBlock.transform.parent.GetComponent<ChunkData>();
-                selectedBlockChunkData.blocks[selectedBlockData.localPosX, selectedBlockData.localPosY, selectedBlockData.localPosZ] = BlockID.air;
+                selectedBlockChunkData.blocks[selectedBlockData.localPosX, selectedBlockData.localPosZ, selectedBlockData.localPosY] = BlockID.air;
 
                 // Drop block item
                 selectedBlock.transform.SetParent(null);
@@ -307,7 +306,7 @@ public class ChunkManager : MonoBehaviour
                         int neighborChunkZ = Mathf.FloorToInt(neighborGlobalPos.z / GameData.CHUNK_SIZE);
                         ChunkData neighborChunkData = chunkParent.transform.Find($"Chunk ({neighborChunkX},{neighborChunkZ})").GetComponent<ChunkData>();
                         (int neighborPosX, int neighborPosY, int neighborPosZ) = ChunkHelpers.GetLocalBlockPos((int)neighborGlobalPos.x, (int)neighborGlobalPos.y, (int)neighborGlobalPos.z);
-                        BlockID neighborBlock = neighborChunkData.blocks[neighborPosX, neighborPosY, neighborPosZ];
+                        BlockID neighborBlock = neighborChunkData.blocks[neighborPosX, neighborPosZ, neighborPosY];
                         if (neighborBlock != BlockID.air)
                             SpawnBlock(neighborChunkData.gameObject, neighborChunkX, neighborChunkZ, neighborBlock, neighborPosX, neighborPosY, neighborPosZ);
                     }
@@ -404,7 +403,7 @@ public class ChunkManager : MonoBehaviour
                             (int blockChunkX, int blockChunkZ) = ChunkHelpers.GetChunkCoordsByBlockPos(blockObj.transform.position);
                             GameObject parentChunk = chunkParent.transform.Find($"Chunk ({blockChunkX},{blockChunkZ})").gameObject;
                             blockObj.transform.parent = parentChunk.transform;
-                            parentChunk.GetComponent<ChunkData>().blocks[blockData.localPosX, blockData.localPosY, blockData.localPosZ] = blockData.blockID;
+                            parentChunk.GetComponent<ChunkData>().blocks[blockData.localPosX, blockData.localPosZ, blockData.localPosY] = blockData.blockID;
 
                             player.DecrementSelectedItem();
                         }
@@ -477,7 +476,7 @@ public class ChunkManager : MonoBehaviour
                     ChunkData chunkData = chunk.AddComponent<ChunkData>();
                     chunkData.globalPosX = chunkX;
                     chunkData.globalPosZ = chunkZ;
-                    chunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT, GameData.CHUNK_SIZE];
+                    chunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT];
                     if (!ChunkHelpers.ChunkFileExists(moon, chunkX, chunkZ))
                     {
                         ChunkHelpers.GenerateChunk(chunkData.blocks, chunkX, chunkZ, moonData);
@@ -506,11 +505,11 @@ public class ChunkManager : MonoBehaviour
                     adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(chunkParent, chunkX, chunkZ);
                     for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
                     {
-                        for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
+                        for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
                         {
-                            for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
+                            for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
                             {
-                                BlockID block = chunkData.blocks[localBlockX, localBlockY, localBlockZ];
+                                BlockID block = chunkData.blocks[localBlockX, localBlockZ, localBlockY];
                                 if (block != BlockID.air && ChunkHelpers.BlockShouldBeRendered(block, adjacentChunkData, chunkData, localBlockX, localBlockY, localBlockZ))
                                     SpawnBlock(chunkObj, chunkX, chunkZ, block, localBlockX, localBlockY, localBlockZ);
                             }
@@ -526,6 +525,7 @@ public class ChunkManager : MonoBehaviour
     {
         int playerChunkX = currentRowRenderTask.newPlayerChunkX;
         int playerChunkZ = currentRowRenderTask.newPlayerChunkZ;
+        int playerPosY = (int)player.transform.position.y;
         XZDirection moveDirection = currentRowRenderTask.direction;
 
         var stopWatch = new System.Diagnostics.Stopwatch();
@@ -566,7 +566,7 @@ public class ChunkManager : MonoBehaviour
                 ChunkData borderChunkData = borderChunk.AddComponent<ChunkData>();
                 borderChunkData.globalPosX = borderChunkX;
                 borderChunkData.globalPosZ = chunkZ;
-                borderChunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT, GameData.CHUNK_SIZE];
+                borderChunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT];
                 if (!ChunkHelpers.ChunkFileExists(moon, borderChunkX, chunkZ))
                 {
                     ChunkHelpers.GenerateChunk(borderChunkData.blocks, borderChunkX, chunkZ, moonData);
@@ -585,13 +585,20 @@ public class ChunkManager : MonoBehaviour
                 GameObject chunk = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})").gameObject;
                 ChunkData chunkData = chunk.GetComponent<ChunkData>();
                 adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(chunkParent, chunkX, chunkZ);
+
+                // Find highest starting level for y loop
+                int centerBlockX = (int)(GameData.CHUNK_SIZE / 2);
+                int centerBlockZ = (int)(GameData.CHUNK_SIZE / 2);
+                bool hasAstronautLair = chunkData.blocks[centerBlockX, centerBlockZ, 0] == BlockID.gravel;
+                int yStart = Mathf.Min(hasAstronautLair ? 38 : 55, playerPosY - 2);
+
                 for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
                 {
-                    for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
+                    for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
                     {
-                        for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
+                        for (int localBlockY = yStart; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
                         {
-                            BlockID block = chunkData.blocks[localBlockX, localBlockY, localBlockZ];
+                            BlockID block = chunkData.blocks[localBlockX, localBlockZ, localBlockY];
                             if (block != BlockID.air)
                             {
                                 bool shouldBeRendered;
@@ -678,7 +685,6 @@ public class ChunkManager : MonoBehaviour
                     newDistantRenderedChunkData.globalPosX = distantRenderedChunkData.globalPosX;
                     newDistantRenderedChunkData.globalPosZ = distantRenderedChunkData.globalPosZ;
                     newDistantRenderedChunkData.blocks = distantRenderedChunkData.blocks;
-                    //ChunkHelpers.GetChunkFromFile(newOldChunkData.blocks, moon, newOldChunkData.globalPosX, newOldChunkData.globalPosZ); // We know this chunk file exists
                     yield return null;
                 }
 
@@ -689,11 +695,10 @@ public class ChunkManager : MonoBehaviour
                 ChunkData borderChunkData = borderChunk.AddComponent<ChunkData>();
                 borderChunkData.globalPosX = chunkX;
                 borderChunkData.globalPosZ = borderChunkZ;
-                borderChunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT, GameData.CHUNK_SIZE];
+                borderChunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT];
                 if (!ChunkHelpers.ChunkFileExists(moon, chunkX, borderChunkZ))
                 {
                     ChunkHelpers.GenerateChunk(borderChunkData.blocks, chunkX, borderChunkZ, moonData);
-                    //ChunkHelpers.SaveChunkToFile(borderChunkData.blocks, moon, chunkX, borderChunkZ);
                 }
                 else
                 {
@@ -709,13 +714,20 @@ public class ChunkManager : MonoBehaviour
                 GameObject chunk = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})").gameObject;
                 ChunkData chunkData = chunk.GetComponent<ChunkData>();
                 adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(chunkParent, chunkX, chunkZ);
+
+                // Find highest starting level for y loop
+                int centerBlockX = (int)(GameData.CHUNK_SIZE / 2);
+                int centerBlockZ = (int)(GameData.CHUNK_SIZE / 2);
+                bool hasAstronautLair = chunkData.blocks[centerBlockX, centerBlockZ, 0] == BlockID.gravel;
+                int yStart = Mathf.Min(hasAstronautLair ? 38 : 55, playerPosY - 2);
+
                 for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
                 {
-                    for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
+                    for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
                     {
-                        for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
+                        for (int localBlockY = yStart; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
                         {
-                            BlockID block = chunkData.blocks[localBlockX, localBlockY, localBlockZ];
+                            BlockID block = chunkData.blocks[localBlockX, localBlockZ, localBlockY];
                             if (block != BlockID.air)
                             {
                                 bool shouldBeRendered;
@@ -785,29 +797,21 @@ public class ChunkManager : MonoBehaviour
         chunkGenerationRate = (float)(2*renderDistance + 1) / stopWatch.Elapsed.Seconds;
     }
 
-    // SpawnBlock(chunk, chunkX, chunkZ, block, localBlockX, localBlockY, localBlockZ)
-    //private void SpawnBlock(BlockID block, GameObject parentChunk, Vector3 localBlockPosition, Vector3 globalChunkPosition)
-    /*
-        5.81 ms
-            - CreatePrimitive - 3.20 ms
-            - AddComponent (BlockData) - 1.13 ms
-            - SetParent (parentChunk) - 0.43 ms
-    */
-    private void SpawnBlock(GameObject parentChunk, int chunkX, int chunkZ, BlockID block, int localBlockX, int localBlockY, int localBlockZ)
+    private void SpawnBlock(GameObject parentChunk, int chunkX, int chunkZ, BlockID blockID, int localBlockX, int localBlockY, int localBlockZ)
     {
         Vector3 globalPosition = new Vector3(
             (chunkX*GameData.CHUNK_SIZE + localBlockX), localBlockY, (chunkZ*GameData.CHUNK_SIZE + localBlockZ)
         );
         GameObject blockObj = Instantiate(blockPrefab, globalPosition, Quaternion.identity, parentChunk.transform);
-        blockObj.GetComponent<Renderer>().material = blockMaterials[(int)block];
+        blockObj.GetComponent<Renderer>().material = blockMaterials[(int)blockID];
 
         BlockData blockData = blockObj.GetComponent<BlockData>();
-        blockData.blockID = block;
+        blockData.blockID = blockID;
         blockData.localPosX = localBlockX;
         blockData.localPosY = localBlockY;
         blockData.localPosZ = localBlockZ;
 
-        if (block == BlockID.light)
+        if (blockID == BlockID.light)
         {
             Light light = blockObj.AddComponent<Light>();
             light.type = LightType.Point;
