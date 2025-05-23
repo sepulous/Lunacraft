@@ -3,7 +3,8 @@ using UnityEngine.SceneManagement;
 
 class BrownMob : MonoBehaviour
 {
-    private GameObject playerObj = null;
+    private Player player = null;
+    private ChunkManager chunkManager = null;
     private Rigidbody rigidbody;
     private BoxCollider collider;
     private float lastActionTime = 0;
@@ -20,30 +21,37 @@ class BrownMob : MonoBehaviour
     private bool rotating = false;
     private float rotationDuration = 0.5F;
     private float rotationTimeElapsed = 0;
+    private int rotationDirection = 1;
     private float timeDamaged = 0;
-    private Quaternion initialRotation;
-    private Quaternion targetRotation;
+
+    private float accelTime = 3;
+    private float timeMoving = 0;
+    private Vector3 chaseVelocity = Vector3.zero;
+    private float chaseSpeedBeforeInertia = 0;
+    private bool hasInertia = false;
+    private bool EMERGENCY = false;
 
     void Awake()
     {
         collider = gameObject.AddComponent<BoxCollider>();
-        // collider.material.staticFriction = 0;
-        // collider.material.dynamicFriction = 0;
         rigidbody = gameObject.AddComponent<Rigidbody>();
         rigidbody.mass = 0.5F;
         rigidbody.angularDamping = 0;
         rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+        rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
     }
 
     void Update()
     {
         if (SceneManager.GetActiveScene().buildIndex == 1)
         {
-            if (playerObj == null)
-                playerObj = GameObject.Find("Player");
+            if (player == null)
+                player = GameObject.Find("Player").GetComponent<Player>();
+
+            if (chunkManager == null)
+                chunkManager = GameObject.Find("ChunkManager").GetComponent<ChunkManager>();
 
             float currentTime = Time.time;
-
             isGrounded = Physics.OverlapBox(transform.position - new Vector3(0, 0.25F, 0), new Vector3(0.5F, 0.01F, 0.5F), Quaternion.identity, LayerMask.GetMask("Block")).Length > 0;
 
             if (timeDamaged != 0 && Time.time - timeDamaged > 0.15F)
@@ -52,20 +60,7 @@ class BrownMob : MonoBehaviour
                 timeDamaged = 0;
             }
 
-            if (aggressive)
-            {
-                // transform.LookAt(playerObj.transform);
-                // rigidbody.linearVelocity = new Vector3(
-                //     6F * (playerObj.transform.position - transform.position).normalized.x,
-                //     rigidbody.linearVelocity.y,
-                //     6F * (playerObj.transform.position - transform.position).normalized.z
-                // );
-                Vector3 displacement = (playerObj.transform.position - transform.position);
-                transform.rotation = Quaternion.Euler(0, Mathf.Rad2Deg*Mathf.Atan2(displacement.x, displacement.z) + 180, 0);
-                Vector3 forceDirection = (new Vector3(displacement.x, 0, displacement.z)).normalized;
-                rigidbody.AddForce(5F * forceDirection);
-            }
-            else
+            if (!aggressive)
             {
                 if (!aboutToAct && isGrounded)
                 {
@@ -80,14 +75,7 @@ class BrownMob : MonoBehaviour
                         int action = UnityEngine.Random.Range(0, 4);
                         if (action == 0) // Rotate
                         {
-                            int direction = UnityEngine.Random.Range(0, 2);
-                            if (direction == 0)
-                                targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y + 45, 0);
-                            else
-                                targetRotation = Quaternion.Euler(0, transform.rotation.eulerAngles.y - 45, 0);
-
-                            // Reset state for rotation calculations
-                            initialRotation = transform.rotation;
+                            rotationDirection = UnityEngine.Random.Range(0, 2) == 0 ? 1 : -1;
                             rotationTimeElapsed = 0;
                             rotating = true;
                         }
@@ -97,9 +85,18 @@ class BrownMob : MonoBehaviour
                         }
                         else // Jump forward
                         {
-                            lastJumpTime = currentTime;
-                            jumpingForward = true;
-                            rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
+                            if (player != null && chunkManager != null)
+                            {
+                                Vector3 playerDisplacement = player.transform.position - transform.position;
+                                float distanceFromPlayer = playerDisplacement.magnitude;
+                                bool cannotJumpOutOfWorld = Vector3.Angle(playerDisplacement, -transform.forward) < 40;
+                                if (cannotJumpOutOfWorld || distanceFromPlayer < Mathf.Sqrt(2) * (32 * (chunkManager.GetRenderDistance() - 1) + 16))
+                                {
+                                    lastJumpTime = currentTime;
+                                    jumpingForward = true;
+                                    rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
+                                }
+                            }
                         }
                         lastActionTime = currentTime;
                         aboutToAct = false;
@@ -108,15 +105,6 @@ class BrownMob : MonoBehaviour
                 else
                 {
                     lastActionTime += Time.deltaTime; // This ensures that the delay only starts after the mob is done acting
-                }
-
-                if (rotating)
-                {
-                    rotationTimeElapsed += Time.deltaTime;
-                    float t = rotationTimeElapsed / rotationDuration;
-                    transform.rotation = Quaternion.Lerp(initialRotation, targetRotation, t);
-                    if (t > 0.99F)
-                        rotating = false;
                 }
 
                 if (jumpingForward && currentTime - lastJumpTime > 4)
@@ -130,17 +118,71 @@ class BrownMob : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (hopping)
+        if (aggressive)
         {
-            Vector3 force = 2F * transform.up;
-            rigidbody.AddForce(force, ForceMode.Impulse);
-            hopping = false;
+            Vector3 displacement = (player.transform.position - transform.position);
+            Vector3 horizontalDisplacement = new Vector3(displacement.x, 0, displacement.z);
+            if (horizontalDisplacement.magnitude > 0.1F && !hasInertia)
+            {
+                Quaternion rotation = Quaternion.Euler(0, Mathf.Rad2Deg*Mathf.Atan2(displacement.x, displacement.z) + 180, 0);
+                rigidbody.MoveRotation(rotation);
+
+                timeMoving += Time.fixedDeltaTime;
+                float t = timeMoving / accelTime;
+                float chaseSpeed = Mathf.Clamp(Mathf.Lerp(0, 12, t), 0, 12);
+                chaseSpeedBeforeInertia = chaseSpeed;
+                float tangent = 0.2F*Mathf.Sin(0.5F * Time.time)*Mathf.Clamp(horizontalDisplacement.magnitude, 0, 6);
+                Vector3 rightVector = Vector3.Cross(horizontalDisplacement, Vector3.up);
+                chaseVelocity = (horizontalDisplacement - tangent*rightVector).normalized * chaseSpeed;
+                rigidbody.MovePosition(transform.position + chaseVelocity * Time.fixedDeltaTime);
+            }
+            else if (timeMoving > 0 && chaseVelocity.magnitude > 0.5F) // Inertia
+            {
+                if (horizontalDisplacement.magnitude > 0.1F)
+                {
+                    Quaternion rotation = Quaternion.Euler(0, Mathf.Rad2Deg*Mathf.Atan2(displacement.x, displacement.z) + 180, 0);
+                    rigidbody.MoveRotation(rotation);
+                }
+
+                timeMoving -= Time.fixedDeltaTime;
+                float t = timeMoving / accelTime;
+                float chaseSpeed = Mathf.Clamp(Mathf.Lerp(0, chaseSpeedBeforeInertia, t), 0, chaseSpeedBeforeInertia);
+                chaseVelocity = chaseVelocity.normalized * chaseSpeed;
+                rigidbody.MovePosition(transform.position + chaseVelocity * Time.fixedDeltaTime);
+
+                hasInertia = chaseSpeed > 0.5F;
+                if (!hasInertia)
+                    timeMoving = 0;
+            }
+            else
+            {
+                hasInertia = false;
+            }
         }
-        else if (jumpingForward)
+        else
         {
-            Vector3 force = 2F * (-transform.forward + 3*transform.up);
-            rigidbody.AddForce(force, ForceMode.Impulse);
-            jumpingForward = false;
+            if (rotating)
+            {
+                rotationTimeElapsed += Time.fixedDeltaTime;
+                float t = rotationTimeElapsed / rotationDuration;
+                Quaternion newRotation = Quaternion.Euler(0, rigidbody.rotation.eulerAngles.y + rotationDirection*(90 * Time.fixedDeltaTime), 0);
+                rigidbody.MoveRotation(newRotation);
+                if (t > 0.99F)
+                    rotating = false;
+            }
+
+            if (hopping)
+            {
+                Vector3 force = 2F * transform.up;
+                rigidbody.AddForce(force, ForceMode.Impulse);
+                hopping = false;
+            }
+            else if (jumpingForward)
+            {
+                Vector3 force = 2F * (-transform.forward + 3*transform.up);
+                rigidbody.AddForce(force, ForceMode.Impulse);
+                jumpingForward = false;
+            }
         }
     }
 
@@ -170,6 +212,12 @@ class BrownMob : MonoBehaviour
             playerScript.Damage(25);
             GameObject.Find("ChunkManager").GetComponent<ChunkManager>().BrownMobExplode(transform.position);
             Destroy(gameObject);
+        }
+        else if (collision.gameObject.layer == LayerMask.NameToLayer("Block"))
+        {
+            float heightDiff = Mathf.Abs(transform.position.y - collision.transform.position.y);
+            if (heightDiff < 0.5F)
+                timeMoving = 0;
         }
     }
 }

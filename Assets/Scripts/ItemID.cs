@@ -92,5 +92,8 @@ public enum ItemID : byte
     minilight,
     magnet,
     biogel,
-    gold
+    gold,
+    green_mob_egg,
+    brown_mob_egg,
+    space_giraffe_egg
 }

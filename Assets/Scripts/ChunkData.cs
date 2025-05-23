@@ -4,5 +4,5 @@ public class ChunkData : MonoBehaviour
 {
     public int globalPosX;
     public int globalPosZ;
-    public BlockID[,,] blocks;
+    public byte[] blocks;
 }

@@ -5,6 +5,8 @@ class GreenMob : MonoBehaviour
 {
     public Material spriteMaterial; // So it can throw out biogel upon death
 
+    private Player player = null;
+    private ChunkManager chunkManager = null;
     private Rigidbody rigidbody;
     private BoxCollider collider;
     private float lastActionTime = 0;
@@ -20,6 +22,8 @@ class GreenMob : MonoBehaviour
     private float rotationTimeElapsed = 0;
     private float timeDamaged = 0;
     private float timeDied = 0;
+    private float deathFallY = 0;
+    private bool diedAndHitGround = false;
     private Quaternion initialRotation;
     private Quaternion targetRotation;
 
@@ -35,6 +39,12 @@ class GreenMob : MonoBehaviour
         if (SceneManager.GetActiveScene().buildIndex == 1)
         {
             float currentTime = Time.realtimeSinceStartup;
+
+            if (player == null)
+                player = GameObject.Find("Player").GetComponent<Player>();
+
+            if (chunkManager == null)
+                chunkManager = GameObject.Find("ChunkManager").GetComponent<ChunkManager>();
 
             if (timeDamaged != 0 && Time.time - timeDamaged > 0.15F)
             {
@@ -70,11 +80,24 @@ class GreenMob : MonoBehaviour
                         }
                         else // Jump forward
                         {
-                            Vector3 force = 5F * (-transform.forward + 2*transform.up);
-                            rigidbody.AddForce(force, ForceMode.Impulse);
-                            lastJumpTime = currentTime;
-                            jumping = true;
-                            rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
+                            if (player != null && chunkManager != null)
+                            {
+                                Vector3 playerDisplacement = player.transform.position - transform.position;
+                                float distanceFromPlayer = playerDisplacement.magnitude;
+                                bool cannotJumpOutOfWorld = Vector3.Angle(playerDisplacement, -transform.forward) < 40;
+                                if (cannotJumpOutOfWorld || distanceFromPlayer < Mathf.Sqrt(2) * (32 * (chunkManager.GetRenderDistance() - 1) + 16))
+                                {
+                                    Vector3 force = 5F * (-transform.forward + 2 * transform.up);
+                                    rigidbody.AddForce(force, ForceMode.Impulse);
+                                    lastJumpTime = currentTime;
+                                    jumping = true;
+                                    rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
+                                }
+                                else
+                                {
+                                    Debug.Log("REFUSING TO JUMP");
+                                }
+                            }
                         }
                         lastActionTime = currentTime;
                         aboutToAct = false;
@@ -104,12 +127,20 @@ class GreenMob : MonoBehaviour
             {
                 if (!deathAnimationFinished)
                 {
-                    // Rotate
-                    rigidbody.constraints = RigidbodyConstraints.None;
-                    if (transform.eulerAngles.z - 90 < 0.5F)
-                        transform.RotateAround(transform.position + 0.5F*Vector3.down + 0.5F*transform.right, transform.forward, 90 * Time.deltaTime);
+                    if (diedAndHitGround || Mathf.Abs(transform.position.y - deathFallY) < 0.1F) // Fall to ground before rotating (if in air)
+                    {
+                        rigidbody.constraints = RigidbodyConstraints.FreezePosition;
+                        diedAndHitGround = true;
+
+                        if (transform.eulerAngles.z - 90 < 0.5F)
+                            transform.RotateAround(transform.position + 0.5F * Vector3.down + 0.5F * transform.right, transform.forward, 90 * Time.deltaTime);
+                        else
+                            deathAnimationFinished = true;
+                    }
                     else
-                        deathAnimationFinished = true;
+                    {
+                        rigidbody.constraints = RigidbodyConstraints.None;
+                    }
                 }
                 else if (Time.time - timeDied > 3)
                 {
@@ -129,9 +160,14 @@ class GreenMob : MonoBehaviour
             if (health == 0)
             {
                 Destroy(GetComponent<BoxCollider>());
-                rigidbody.constraints = RigidbodyConstraints.FreezePosition | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY;
-                rigidbody.useGravity = false;
+                rigidbody.constraints = RigidbodyConstraints.FreezePositionX | RigidbodyConstraints.FreezePositionZ | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY;
                 timeDied = Time.time;
+
+                // Figure out where to fall
+                if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hitInfo, Mathf.Infinity, LayerMask.GetMask("Block")))
+                    deathFallY = hitInfo.transform.position.y + 1F;
+                else
+                    deathFallY = transform.position.y;
 
                 // Shoot out biogel
                 GameObject biogel = GameObject.CreatePrimitive(PrimitiveType.Cube);

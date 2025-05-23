@@ -24,6 +24,8 @@ public class ResetMenu : MonoBehaviour
         File.Delete(moonFolder + "/player.dat");
         Directory.Delete(moonFolder + "/chunks", true);
         Directory.CreateDirectory(moonFolder + "/chunks");
+        Directory.Delete(moonFolder + "/mobs", true);
+        Directory.CreateDirectory(moonFolder + "/mobs");
         if (moon == 0)
             GameObject.Find("Moon A").transform.Find("Text").GetComponent<Text>().text = "Moon A -Unexplored-";
         else if (moon == 1)

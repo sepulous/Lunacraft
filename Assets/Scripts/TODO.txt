@@ -1,257 +1,29 @@
 
 
-For a 3D array of d1 x d2 x d3
 
-    3D -> 1D: (i, j, k) -> n = i*d2*d3 + j*d3 + k
 
-    1D -> 3D: i = FLOOR(n / (d2 * d3))
-              j = FLOOR((n % (d2*d3)) / d3)
-              k = n % d3
+* Save mobs when saving chunks
 
 
-    FUN FACT: If I keep the chunk dimensions as powers of two, these divisions are just bit shifts
+Let's try to remove the need for border chunks.
+    1. Each chunk stores a border that includes blocks from adjacent chunks
+    2. Every block place/destroy affects 2 or 4 chunks
 
-    FUN FACT #2: A remainder from a division by a power of two can be computed as:
-        r = n - q*2^k
-          = n - (n >> k)*2^k
-          = n - (n >> k) << k
 
-    FUN FACT #3: floor(x) can be computed as:
-        int floor(float x)
-        {
-            int sign = x >> 31;
-            return (int)x - sign;
-        }
 
-    As long as d1, d2, and d3 are powers of two, there's no need for multiplication, division, or branching
 
-    When I implement this, let's start with native Unity/C# functions, and then try these custom methods, and benchmark both
+IDEA: Run-length encode the chunk columns. The algorithm is very simple and extremely compatible with the structure.
+    - Then, I don't have to do 128 iterations when spawning blocks. I can skip the air entirely (unless it's interrupted by trees/crystal plants).
 
+    Possible issue: I may not be able to compress on-the-fly, which requires a large iteration to compress
 
+typical case (roughly):
+    rock ~ 60 bytes -> 2 bytes
+    gravel ~ 4 bytes
+    dirt ~ 4 bytes
+    air ~ 70 bytes -> 2 bytes
 
+Uncompressed: ~131 kB
+Compressed: ~12 kB
+Ratio: 10.67
 
-
-struct RenderCheckJob : IJob
-{
-    NativeArray<byte> chunk;
-    NativeArray<byte> leftChunk;
-    NativeArray<byte> rightChunk;
-    NativeArray<byte> frontChunk;
-    NativeArray<byte> backChunk;
-    NativeArray<byte> output;
-}
-
-The neighboring chunk data already exists, just find the right chunks and pass them in
-    - Already have GetNeighboringChunks()
-
-RenderCheckJob renderCheckJob = new RenderCheckJob {
-    chunk = chunk,
-    leftChunk = leftChunk,
-    ...
-};
-
-for (int i = 0; i < chunkData.blocks.Length; i++)
-{
-    byte blockID = chunkData.blocks[i];
-    int localBlockX = FLOOR(i / (GameData.WORLD_HEIGHT_LIMIT * GameData.CHUNK_SIZE));
-    int localBlockY = FLOOR((i % (GameData.WORLD_HEIGHT_LIMIT * GameData.CHUNK_SIZE)) / GameData.CHUNK_SIZE);
-    int localBlockZ = i % GameData.CHUNK_SIZE;
-    ...
-    output[i] = blockIsTouchingAir ? 1 : -1;
-}
-
-LATER (LateUpdate?)
-
-int positionIndex = 0;
-for (int i = 0; i < output.Length; i++)
-{
-    byte blockID = output[i];
-    if (blockID != -1)
-    {
-        float localPosX = positions[positionIndex];
-        float localPosY = positions[positionIndex+1];
-        float localPosZ = positions[positionIndex+2];
-        RenderBlock();
-    }
-    positionIndex += 3;
-}
-
-
-
-* Added minilights
-* Fixed some tree bugs
-
-
-Rendering ideas:
-    * What if I flatten the 3D block array into 1D?
-        - This will take some work, so let's be sure this is actually more memory efficient
-
-
-
-Profiling
------------------------------
-
-When not generating, it's even with periodic spikes
-    * Even
-        - PlayerLoop [51.5%]
-            - RenderPipelineManager.DoRenderLoop_Internal() [41.1%]
-            - Update() [4.6%]
-            - FixedUpdate.PhysicsFixedUpdate() [4.5%]
-
-        Lesson: When nothing is happening, most of the execution (CPU) is for rendering
-
-    * Spikes
-        - These seem to be purely due to the EditorLoop shooting up. Good.
-
-
-When generating, there's an initial lag spike, and then reduced FPS due to rendering
-    * Initial lag spike
-        - ChunkHelpers.GenerateChunk() [40.8%]
-            - Object.ElementAddr_1() takes up almost all the time
-        - ChunkHelpers.SaveChunkToFile() [32.9%]
-            - Object.ElementAddr_1() takes up almost all the time
-
-    * While rendering
-        - ChunkManager.SpawnBlock() [8.3%]
-            - Object.Instantiate() takes up almost all the time
-        - ChunkHelpers.BlockShouldBeRendered() [5.8%]
-            - Object.ElementAddr_1() takes up almost all the time
-        - ChunkHelpers.BlockShouldBeRenderedINNER() [5.7%]
-            - Object.ElementAddr_1() takes up almost all the time
-
-
-MobHelpers.GetMobsInChunk() takes 25.63ms. Terrible.
-
-
-
-New change: GenerateChunk() loops through the middle index in the innermost loop, since I'm doing chunk[x,y,z].
-            It's more cache efficient for the innermost loop to go over the last index, so change this
-            to chunk[x,z,y]
-
-
-    
-* Raising the starting y-level when rendering brought the average execution time for RenderNewRow from 4.3ms -> 2.8ms (65%)
-    - Shouldn't expect a huge boost, as this only affects the checking of whether to spawn a block. The real bottleneck
-      is the spawning. But I'll take as many milliseconds as I can get.
-
-
-* Instantiating a block prefab instead of constructing everything from scratch brought the average execution time
-  of SpawnBlock from 5.45ms -> 2.5ms (46%)
-
-
-
-TODO:
-    * Spread out calls to GenerateChunk so they don't all happen at once
-        - Many small lag spikes instead of one huge one
-            - Big lag spike lasts about 14 frames
-        - Don't yield right after calling GenerateChunk. Do more work first.
-
-    * Instantiate() takes most time in SpawnBlock()
-        - Test object pooling (more rigorously this time). Have SpawnBlock use the object pool. This won't have any effect for the
-        first row, so check the second and third rows.
-
-
-
-
-SpawnBlock time
-
-NO POOLING
----------------
-    2nd row: 1.45, 1.56, 1.82, 2.88, 2.44, 3.11
-    3rd row: 1.33, 1.58, 1.28, 1.34, 1.86, 2.42
-
-WITH POOLING (not pre-filled)
----------------
-    2nd row: 0.73, 0.74, 0.97, 3.6, 3.48, 3.47
-    3rd row: 0.73, 1.4, 1.83, 1.52, 2.96, 2.65
-
-WITH POOLING (pre-filled)
----------------
-    2nd row: 
-    3rd row: 
-
-
-
-// 2D simplex noise
-public static float noise(float xin, float zin)
-{
-    float n0, n1, n2; // Noise contributions from the three corners
-
-    // Skew the input space to determine which simplex cell we're in
-    final float F2 = 0.5*(Math.sqrt(3.0)-1.0);
-    float s = (xin+zin)*F2; // Hairy factor for 2D
-    int i = fastfloor(xin+s);
-    int j = fastfloor(zin+s);
-    final float G2 = (3.0-Math.sqrt(3.0))/6.0;
-    float t = (i+j)*G2;
-    float X0 = i-t; // Unskew the cell origin back to (x,y) space
-    float Y0 = j-t;
-    float x0 = xin-X0; // The x,y distances from the cell origin
-    float y0 = zin-Y0;
-
-    // For the 2D case, the simplex shape is an equilateral triangle.
-    // Determine which simplex we are in.
-    int i1, j1; // Offsets for second (middle) corner of simplex in (i,j) coords
-    if(x0>y0) {i1=1; j1=0;} // lower triangle, XY order: (0,0)->(1,0)->(1,1)
-    else {i1=0; j1=1;} // upper triangle, YX order: (0,0)->(0,1)->(1,1)
-
-    // A step of (1,0) in (i,j) means a step of (1-c,-c) in (x,y), and
-    // a step of (0,1) in (i,j) means a step of (-c,1-c) in (x,y), where
-    // c = (3-sqrt(3))/6
-    float x1 = x0 - i1 + G2; // Offsets for middle corner in (x,y) unskewed coords
-    float y1 = y0 - j1 + G2;
-    float x2 = x0 - 1.0 + 2.0 * G2; // Offsets for last corner in (x,y) unskewed coords
-    float y2 = y0 - 1.0 + 2.0 * G2;
-
-    // Work out the hashed gradient indices of the three simplex corners
-    int ii = i & 255;
-    int jj = j & 255;
-    int gi0 = perm[ii+perm[jj]] % 12;
-    int gi1 = perm[ii+i1+perm[jj+j1]] % 12;
-    int gi2 = perm[ii+1+perm[jj+1]] % 12;
-
-    // Calculate the contribution from the three corners
-    float t0 = 0.5 - x0*x0-y0*y0;
-    if (t0 < 0) {
-        n0 = 0.0;
-    }
-    else {
-        t0 *= t0;
-        n0 = t0 * t0 * dot(grad3[gi0], x0, y0); // (x,y) of grad3 used for 2D gradient
-    }
-
-    // BRANCHLESS VERSION OF THE ABOVE CODE
-    // uint t0_sign_bit = (uint)t0 >> 31; // 1 if t0 < 0, 0 if t0 >= 0
-    // n0 = (1 - t0_sign_bit) * (t0 * t0) * (t0 * t0) * dot(grad3[gi0], x0, y0);
-
-    float t1 = 0.5 - x1*x1-y1*y1;
-    if (t1 < 0) {
-        n1 = 0.0;
-    }
-    else {
-        t1 *= t1;
-        t1_new = t1 * t1
-        n1 = t1 * t1 * dot(grad3[gi1], x1, y1);
-    }
-
-    // BRANCHLESS VERSION OF THE ABOVE CODE
-    // uint t1_sign_bit = (uint)t1 >> 31; // 1 if t1 < 0, 0 if t1 >= 0
-    // n1 = (1 - t1_sign_bit) * (t1 * t1) * (t1 * t1) * dot(grad3[gi1], x1, y1);
-
-    float t2 = 0.5 - x2*x2-y2*y2;
-    if (t2 < 0) {
-        n2 = 0.0;
-    }
-    else {
-        t2 *= t2;
-        n2 = t2 * t2 * dot(grad3[gi2], x2, y2);
-    }
-
-    // BRANCHLESS VERSION OF THE ABOVE CODE
-    // uint t2_sign_bit = (uint)t2 >> 31; // 1 if t2 < 0, 0 if t2 >= 0
-    // n2 = (1 - t2_sign_bit) * (t2 * t2) * (t2 * t2) * dot(grad3[gi2], x2, y2);
-    
-    // Add contributions from each corner to get the final noise value.
-    // The result is scaled to return values in the interval [-1,1].
-    return 70.0 * (n0 + n1 + n2);
-}

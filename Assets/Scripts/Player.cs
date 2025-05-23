@@ -47,6 +47,7 @@ public class Player : MonoBehaviour
     private float maxSelectionDistance = 9F;
     private bool destroyedBlock;
     private bool placedBlock;
+    private bool spawnedMob;
     private string playerDataPath;
     private Mesh blockMesh;
     private List<Material> blockMaterials;
@@ -241,6 +242,13 @@ public class Player : MonoBehaviour
 
     void Update()
     {
+        // GameObject[] mobs = GameObject.FindGameObjectsWithTag("Mob");
+        // int fallenMobCount = 0;
+        // foreach (GameObject mob in mobs)
+        //     if (mob.transform.position.y < 0)
+        //         fallenMobCount++;
+        // Debug.Log($"Fallen mob count: {fallenMobCount}");
+
         if (health == 0)
         {
             GetComponent<CharacterController>().enabled = false;
@@ -284,10 +292,13 @@ public class Player : MonoBehaviour
                         suitStatus = Mathf.Min(100, suitStatus + 2);
                     else
                         suitStatus = Mathf.Min(100, suitStatus + 3);
+
+                    suitStatusImage.fillAmount = suitStatus / 100F;
                 }
                 if (suitStatus > 0 && health < 100)
                 {
                     health++;
+                    healthImage.fillAmount = health / 100F;
                 }
                 lastHealthUpdate = Time.time;
             }
@@ -326,8 +337,10 @@ public class Player : MonoBehaviour
             if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf && selectionCube.activeSelf)
             {
                 ItemID selected = inventorySystem.inventory.slots[0][inventorySystem.selectedHotbarSlot - 1].itemID;
+
                 placedBlock = Input.GetMouseButtonDown(1) && (Enum.TryParse(selected.ToString(), out BlockID _) || selected.ToString().StartsWith("minilight"));
-                if (placedBlock)
+                spawnedMob = Input.GetMouseButtonDown(1) && (selected == ItemID.green_mob_egg || selected == ItemID.brown_mob_egg || selected == ItemID.space_giraffe_egg);
+                if (placedBlock || spawnedMob)
                 {
                     handObj.GetComponent<Animator>().SetTrigger("PlacedBlock");
                     blockPlaceSource.Play();
@@ -343,14 +356,37 @@ public class Player : MonoBehaviour
                 Dropped droppedScript = droppedObj.GetComponent<Dropped>();
                 if (!droppedScript.thrown || droppedScript.readyForPickup)
                 {
-                    if (displacement.magnitude < 1F) // Pick item up
+                    if (displacement.magnitude < 1F) // Pick item up (close enough)
                     {
                         ItemID droppedItemID = droppedScript.itemID;
                         if (droppedItemID == ItemID.topsoil)
                             droppedItemID = ItemID.dirt;
-                        AddToInventory(droppedItemID, droppedScript.amount);
+                        (int i, int j) = AddToInventory(droppedItemID, droppedScript.amount);
                         Destroy(droppedObj);
                         pickupSource.Play();
+
+                        // Update hotbar slot (if item went to hotbar slot)
+                        if (i == 0)
+                        {
+                            InventorySlot slot = inventorySystem.inventory.slots[0][j];
+                            string itemName = slot.itemID.ToString();
+                            int amount = slot.amount;
+                            GameObject slotObj = hotbarUI.transform.Find($"Slot {j + 1}").gameObject;
+
+                            // Set icon
+                            Image slotImage = slotObj.GetComponent<Image>();
+                            if (slot.itemID == ItemID.none)
+                                slotImage.sprite = MeshData.GetItemSprite(ItemID.none);
+                            else
+                                slotImage.sprite = MeshData.GetItemSprite(slot.itemID);
+
+                            // Set amount
+                            TMP_Text amountText = slotObj.transform.GetChild(0).GetComponent<TMP_Text>();
+                            if (amount < 2 || !InventorySystem.ItemIsStackable(slot.itemID))
+                                amountText.text = "";
+                            else
+                                amountText.text = $"{amount}";
+                        }
                     }
                     else // Move item toward player
                     {
@@ -427,6 +463,30 @@ public class Player : MonoBehaviour
                     else // Punching
                     {
                         handAnimator.SetBool("IsPunching", true);
+
+                        if (selectionCube.activeSelf)
+                        {
+                            blockMineTime += Time.deltaTime; // BUG: This *may* be framerate dependent. Make sure it isn't.
+                            float totalMineTime = 2.5F;
+                            int blockMineLevel = (int)((5 * blockMineTime) / totalMineTime);
+                            if (blockMineLevel == 5)
+                            {
+                                selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
+                                blockMineTime = 0;
+                                destroyedBlock = true;
+                                blockBreakSource.Play();
+                            }
+                            else
+                            {
+                                selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[blockMineLevel];
+                            }
+                        }
+                        else
+                        {
+                            selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
+                            blockMineTime = 0;
+                            destroyedBlock = false;
+                        }
                     }
                 }
                 else if (Input.GetMouseButtonUp(0))
@@ -448,11 +508,14 @@ public class Player : MonoBehaviour
                         slugComponent.initialPosition = pistolObj.transform.position;
                         int pistolLevel = selectedItem.ToString()[^1] - '0';
                         float chargeAmount = pistolLevel * Mathf.Clamp(pistolChargeTime, 0, 5); // 5 seconds is maximum charge
-                        slugComponent.initialVelocity = (15*chargeAmount + 2) * (camera.transform.forward - 0.02F*camera.transform.right);
+                        slugComponent.initialVelocity = (15 * chargeAmount + 2) * (camera.transform.forward - 0.02F * camera.transform.right);
                         slugComponent.initialAngleInDegrees = camera.transform.eulerAngles.x;
                         pistolChargeTime = 0;
                         pistolSource.Play();
                     }
+
+                    selectionCube.GetComponent<Renderer>().material = selectionCubeMaterials[0];
+                    blockMineTime = 0;
                 }
             }
             else
@@ -484,6 +547,8 @@ public class Player : MonoBehaviour
 
             if (!pauseMenu.IsPaused() && !inventoryUI.activeSelf)
             {
+                bool hotbarSelectionChanged = false;
+
                 // Change hotbar selection (number key)
                 for (int i = 0; i <= 9; i++)
                 {
@@ -497,7 +562,7 @@ public class Player : MonoBehaviour
                         CancelAllAnimations();
                         drillPowerupSource.Stop();
                         drillingSource.Stop();
-                        UpdateInventoryUI();
+                        hotbarSelectionChanged = true;
 
                         break;
                     }
@@ -525,7 +590,19 @@ public class Player : MonoBehaviour
                     CancelAllAnimations();
                     drillPowerupSource.Stop();
                     drillingSource.Stop();
-                    UpdateInventoryUI();
+                    hotbarSelectionChanged = true;
+                }
+
+                if (hotbarSelectionChanged)
+                {
+                    foreach (Transform slot in hotbarUI.transform)
+                    {
+                        if (slot.gameObject.name.StartsWith("Slot"))
+                        {
+                            bool selected = slot.gameObject.name == $"Slot {inventorySystem.selectedHotbarSlot}";
+                            slot.Find("Selected").gameObject.SetActive(selected);
+                        }
+                    }
                 }
             }
 
@@ -623,9 +700,9 @@ public class Player : MonoBehaviour
                     {
                         for (int j = 0; j < 10; j++)
                         {
-                            float xLeft = (634F / 2560F) + j*(135F / 2560F);
+                            float xLeft = (634F / 2560F) + j * (135F / 2560F);
                             float xRight = xLeft + (118F / 2560F);
-                            float yBottom = (74F / 1440F) + i*(135F / 1440F);
+                            float yBottom = (74F / 1440F) + i * (135F / 1440F);
                             float yTop = yBottom + (118F / 1440F);
                             if (mousePosRatioX > xLeft && mousePosRatioX < xRight && mousePosRatioY > yBottom && mousePosRatioY < yTop)
                             {
@@ -640,9 +717,9 @@ public class Player : MonoBehaviour
                     {
                         for (int j = 0; j < 3; j++)
                         {
-                            float xLeft = (1496F / 2560F) + j*(120F / 2560F);
+                            float xLeft = (1496F / 2560F) + j * (120F / 2560F);
                             float xRight = xLeft + (104F / 2560F);
-                            float yBottom = (908F / 1440F) + i*(120F / 1440F);
+                            float yBottom = (908F / 1440F) + i * (120F / 1440F);
                             float yTop = yBottom + (104F / 1440F);
                             if (mousePosRatioX > xLeft && mousePosRatioX < xRight && mousePosRatioY > yBottom && mousePosRatioY < yTop)
                             {
@@ -731,7 +808,7 @@ public class Player : MonoBehaviour
                         {
                             bool hoveredSlotHasStack = hoveredSlot.itemID != ItemID.none;
                             bool sameItemID = heldItemID == hoveredSlot.itemID;
-                            
+
                             if (leftClick)
                             {
                                 if (!holdingStack) // Not holding anything
@@ -838,7 +915,7 @@ public class Player : MonoBehaviour
                                         {
                                             ItemID hoveredItemID = hoveredSlot.itemID;
                                             int hoveredItemAmount = hoveredSlot.amount;
-                                            
+
                                             hoveredSlot.itemID = heldItemID;
                                             hoveredSlot.amount = heldItemAmount;
                                             heldItemID = hoveredItemID;
@@ -872,10 +949,10 @@ public class Player : MonoBehaviour
     {
         health = Mathf.Max(0, health - amount);
         suitStatus = Mathf.Max(0, (int)(suitStatus - 0.8F*amount));
+        healthImage.fillAmount = health / 100F;
+        suitStatusImage.fillAmount = suitStatus / 100F;
         if (amount == 25 && !blockBreakSource.isPlaying) // Brown mob; play "explode" sound
-        {
             blockBreakSource.Play();
-        }
     }
 
     private void ThrowStack(ItemID itemID, int amount)
@@ -929,7 +1006,8 @@ public class Player : MonoBehaviour
         return inventorySystem.GetSelectedItem();
     }
 
-    public void AddToInventory(ItemID itemID, int amount)
+    // Returns affected inventory slot
+    public (int, int) AddToInventory(ItemID itemID, int amount)
     {
         int firstEmptyRow = -1;
         int firstEmptyCol = -1;
@@ -952,7 +1030,8 @@ public class Player : MonoBehaviour
                 {
                     slot.amount += amount;
                     addedToStack = true;
-                    break;
+                    //break;
+                    return (i, j);
                 }
             }
         }
@@ -960,7 +1039,10 @@ public class Player : MonoBehaviour
         if (!addedToStack && firstEmptyRow != -1) // No existing stack, but empty slot exists
         {
             inventorySystem.inventory.slots[firstEmptyRow][firstEmptyCol] = new InventorySlot(itemID, amount);
+            return (firstEmptyRow, firstEmptyCol);
         }
+
+        return (0, 0);
     }
 
     private void UpdateInventoryUI()
@@ -994,16 +1076,6 @@ public class Player : MonoBehaviour
                     amountText.text = "";
                 else
                     amountText.text = $"{amount}";
-            }
-        }
-
-        // Update selected hotbar slot
-        foreach (Transform slot in hotbarUI.transform)
-        {
-            if (slot.gameObject.name.StartsWith("Slot"))
-            {
-                bool selected = slot.gameObject.name == $"Slot {inventorySystem.selectedHotbarSlot}";
-                slot.Find("Selected").gameObject.SetActive(selected);
             }
         }
 
@@ -1124,10 +1196,6 @@ public class Player : MonoBehaviour
             assemblerOutputImage.sprite = MeshData.GetItemSprite(ItemID.none);
             assemblerOutputAmount.text = "";
         }
-
-        // Update health and suit status
-        healthImage.fillAmount = health / 100F;
-        suitStatusImage.fillAmount = suitStatus / 100F;
     }
 
     public void BackToMainMenu()
@@ -1230,6 +1298,16 @@ public class Player : MonoBehaviour
     public void ResetPlacedBlock()
     {
         placedBlock = false;
+    }
+
+    public bool SpawnedMob()
+    {
+        return spawnedMob;
+    }
+
+    public void ResetSpawnedMob()
+    {
+        spawnedMob = false;
     }
 
     public GameObject GetSelectedBlock()

@@ -162,12 +162,11 @@ public class LevelManager : MonoBehaviour
             {
                 GameObject chunk = new GameObject($"Chunk ({chunkX},{chunkZ})");
                 chunk.transform.SetParent(chunkParent.transform);
-                DontDestroyOnLoad(chunk); // Must persist into Game scene
                 chunk.tag = "Chunk";
                 ChunkData chunkData = chunk.AddComponent<ChunkData>();
                 chunkData.globalPosX = chunkX;
                 chunkData.globalPosZ = chunkZ;
-                chunkData.blocks = new BlockID[GameData.CHUNK_SIZE, GameData.CHUNK_SIZE, GameData.WORLD_HEIGHT_LIMIT];
+                chunkData.blocks = new byte[GameData.CHUNK_SIZE * GameData.CHUNK_SIZE * GameData.WORLD_HEIGHT_LIMIT];
                 if (ChunkHelpers.ChunkFileExists(moon, chunkX, chunkZ))
                 {
                     ChunkHelpers.GetChunkFromFile(chunkData.blocks, moon, chunkX, chunkZ);
@@ -192,13 +191,14 @@ public class LevelManager : MonoBehaviour
                 ChunkData chunkData = chunk.GetComponent<ChunkData>();
                 adjacentChunkData = ChunkHelpers.GetAdjacentChunkData(chunkParent, chunkX, chunkZ);
 
+                int chunkIndex = 0;
                 for (int localBlockX = 0; localBlockX < GameData.CHUNK_SIZE; localBlockX++)
                 {
                     for (int localBlockZ = 0; localBlockZ < GameData.CHUNK_SIZE; localBlockZ++)
                     {
                         for (int localBlockY = 0; localBlockY < GameData.WORLD_HEIGHT_LIMIT; localBlockY++)
                         {
-                            BlockID block = chunkData.blocks[localBlockX, localBlockZ, localBlockY];
+                            BlockID block = (BlockID)chunkData.blocks[chunkIndex++];
                             if (block != BlockID.air)
                             {
                                 bool shouldBeRendered;
@@ -286,41 +286,38 @@ public class LevelManager : MonoBehaviour
         {
             for (int chunkZ = playerChunkZ - renderDistance; chunkZ <= playerChunkZ + renderDistance; chunkZ++)
             {
-                Transform chunkTransform = chunkParent.transform.Find($"Chunk ({chunkX},{chunkZ})");
-                MobData[] mobs = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
-                if (mobs != null)
+                float[] mobData = MobHelpers.GetMobsInChunk(moon, chunkX, chunkZ);
+                if (mobData != null)
                 {
-                    foreach (MobData mobData in mobs)
+                    for (int i = 0; i < mobData.Length; i += 6)
                     {
-                        if (mobData == null)
-                        {
-                            Debug.Log("NULL MOB DATA");
-                            continue;
-                        }
-
                         Vector3 mobPosition = new Vector3(
-                            mobData.positionX,
-                            mobData.positionY,
-                            mobData.positionZ
+                            mobData[i + 2],
+                            mobData[i + 3],
+                            mobData[i + 4]
                         );
+
                         Quaternion mobRotation = Quaternion.Euler(
                             0,
-                            mobData.rotationY,
+                            mobData[i + 5],
                             0
                         );
 
-                        if (mobData.mobID == 0) // Green mob
+                        if (mobData[i] == 0) // Green mob
                         {
-                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, chunkTransform);
+                            GameObject mob = Instantiate(greenMobPrefab, mobPosition, mobRotation, null);
+                            mob.tag = "Mob";
                         }
-                        else if (mobData.mobID == 1) // Brown mob
+                        else if (mobData[i] == 1) // Brown mob
                         {
-                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, chunkTransform);
-                            mob.GetComponent<BrownMob>().aggressive = mobData.aggressive;
+                            GameObject mob = Instantiate(brownMobPrefab, mobPosition, mobRotation, null);
+                            mob.GetComponent<BrownMob>().aggressive = (mobData[i + 1] == 1);
+                            mob.tag = "Mob";
                         }
-                        else if (mobData.mobID == 2) // Space giraffe
+                        else if (mobData[i] == 2) // Space giraffe
                         {
-                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, chunkTransform);
+                            GameObject mob = Instantiate(spaceGiraffePrefab, mobPosition, mobRotation, null);
+                            mob.tag = "Mob";
                         }
                     }
                 }

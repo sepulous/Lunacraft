@@ -93,7 +93,7 @@ public class FPSController : MonoBehaviour
             float mouseSpeedFB = walkSpeed * Input.GetAxis("Vertical");
             float mouseSpeedLR = walkSpeed * Input.GetAxis("Horizontal");
             float movementDirectionY = moveDirection.y;
-            moveDirection = (forward * mouseSpeedFB) + (right * mouseSpeedLR) + moveDirection.y*Vector3.up;
+            moveDirection = (forward * mouseSpeedFB) + (right * mouseSpeedLR) + moveDirection.y * Vector3.up;
 
             bool isPaused = pauseMenu.IsPaused();
             bool inventoryOpen = inventoryUI.activeSelf;
@@ -206,6 +206,11 @@ public class FPSController : MonoBehaviour
                     bobbing = false;
                     bobAnimator.SetBool("IsMoving", false);
                 }
+            }
+            else if (bobbing)
+            {
+                bobbing = false;
+                bobAnimator.SetBool("IsMoving", false);
             }
         }
     }

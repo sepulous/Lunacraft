@@ -51,7 +51,6 @@ Shader "Custom/OpaqueShader"
                 float3 positionWS  : TEXCOORD1;
                 float3 normalWS    : TEXCOORD2;
                 float2 uv          : TEXCOORD0;
-                float fogFactor    : TEXCOORD3;
             };
 
             Varyings vert(Attributes IN)
@@ -61,11 +60,6 @@ Shader "Custom/OpaqueShader"
                 OUT.positionCS = TransformWorldToHClip(OUT.positionWS);
                 OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
                 OUT.uv = IN.uv;
-
-                // Compute fog factor based on distance
-                float distance = length(mul(UNITY_MATRIX_MV, IN.positionOS).xyz) - 60;
-                OUT.fogFactor = saturate(exp(-0.08 * distance));
-
                 return OUT;
             }
 
@@ -103,8 +97,6 @@ Shader "Custom/OpaqueShader"
                     float3 lightPos = _AdditionalLightsPosition[lightIndex];
                     float3 displacement = inputData.positionWS - lightPos;
                     lighting += LightBlockLighting(displacement, additionalLight);
-                    if (any(lighting + 0.05 >= 1.5))
-                        break;
                 LIGHT_LOOP_END
 
                 #endif
@@ -115,7 +107,7 @@ Shader "Custom/OpaqueShader"
             half4 frag(Varyings input) : SV_Target0
             {
                 half4 halfFogColor = half4(unity_FogColor.rgb, 1);
-                float viewDistance = length(_WorldSpaceCameraPos - input.positionWS) - 20;
+                float viewDistance = length(_WorldSpaceCameraPos - input.positionWS) - 40;
                 float fogFactor = saturate(exp(-0.12 * viewDistance));
 
                 // The Forward+ light loop (LIGHT_LOOP_BEGIN) requires the InputData struct to be in its scope.

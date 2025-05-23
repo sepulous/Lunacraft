@@ -79,6 +79,10 @@ public class Inventory
             slots[0][4] = new InventorySlot(ItemID.chronobooster, 1);
             slots[0][5] = new InventorySlot(ItemID.chronowinder, 1);
             slots[0][6] = new InventorySlot(ItemID.camera, 1);
+
+            slots[0][7] = new InventorySlot(ItemID.green_mob_egg, 1);
+            slots[0][8] = new InventorySlot(ItemID.brown_mob_egg, 1);
+            slots[0][9] = new InventorySlot(ItemID.space_giraffe_egg, 1);
         }
         else // Default explore loadout
         {

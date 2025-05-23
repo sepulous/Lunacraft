@@ -9,6 +9,11 @@ public class Slug : MonoBehaviour
     private bool flying = true;
     private float timeSinceCollision = 0;
 
+    void Awake()
+    {
+        GetComponent<Rigidbody>().collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+    }
+
     void Update()
     {
         if (flying && initialPosition != Vector3.zero && initialVelocity != Vector3.zero && initialAngleInDegrees != -420)

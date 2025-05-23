@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
-using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
 
 [Serializable]
@@ -10,41 +9,56 @@ public enum AstronautType
     WHITE, GREEN, BLUE, PINK, YELLOW
 }
 
-[Serializable]
-public class MobData
-{
-    public int mobID;
-    public AstronautType astronautType;
-    public float positionX;
-    public float positionY;
-    public float positionZ;
-    public float rotationY;
-    public bool aggressive;
-}
+/*
+
+Mob IDs:
+    0 - Green mob
+    1 - Brown mob
+    2 - Space giraffe
+    3 - White astronaut
+    4 - Green astronaut
+    5 - Blue astronaut
+    6 - Pink astronaut
+    7 - Yellow astronaut
+
+[mobID, aggression, posX, posY, posZ, rotY]
+
+*/
 
 public class MobHelpers
 {
-    public static MobData[] GetMobsInChunk(int moon, int chunkX, int chunkZ)
+    public static float[] GetMobsInChunk(int moon, int chunkX, int chunkZ)
     {
         ulong chunkID = CombineChunkCoordinates(chunkX, chunkZ);
-        string mobFilePath = string.Format("{0}/moons/moon{1}/mobs/{2}.dat", Application.persistentDataPath, moon, chunkID);
+        string mobFilePath = $"{Application.persistentDataPath}/moons/moon{moon}/mobs/{chunkID}.dat";
+
         if (!File.Exists(mobFilePath))
             return null;
-            
+
+        long mobFileSizeInBytes = (new FileInfo(mobFilePath)).Length;
+        byte[] mobDataBytes = new byte[mobFileSizeInBytes];
         using (FileStream mobFile = File.Open(mobFilePath, FileMode.Open, FileAccess.Read))
-            return (MobData[])(new BinaryFormatter()).Deserialize(mobFile);
+            mobFile.Read(mobDataBytes, 0, mobDataBytes.Length);
+
+        float[] mobData = new float[mobDataBytes.Length / sizeof(float)];
+        Buffer.BlockCopy(mobDataBytes, 0, mobData, 0, mobDataBytes.Length);
+
+        return mobData;
     }
 
-    public static void SaveMobsToChunk(MobData[] mobs, int moon, int chunkX, int chunkZ)
+    public static void SaveMobsToChunk(float[] mobData, int moon, int chunkX, int chunkZ)
     {
         ulong chunkID = CombineChunkCoordinates(chunkX, chunkZ);
-        string mobFolder = string.Format("{0}/moons/moon{1}/mobs", Application.persistentDataPath, moon);
-        string mobFilePath = string.Format("{0}/moons/moon{1}/mobs/{2}.dat", Application.persistentDataPath, moon, chunkID);
+        string mobFolder = $"{Application.persistentDataPath}/moons/moon{moon}/mobs";
+        string mobFilePath = $"{Application.persistentDataPath}/moons/moon{moon}/mobs/{chunkID}.dat";
         if (!Directory.Exists(mobFolder))
             Directory.CreateDirectory(mobFolder);
 
+        byte[] mobDataBytes = new byte[mobData.Length * sizeof(float)];
+        Buffer.BlockCopy(mobData, 0, mobDataBytes, 0, mobDataBytes.Length);
+
         using (FileStream mobFile = File.Open(mobFilePath, FileMode.Create, FileAccess.Write))
-            (new BinaryFormatter()).Serialize(mobFile, mobs);
+            mobFile.Write(mobDataBytes, 0, mobDataBytes.Length);
     }
 
     private static ulong CombineChunkCoordinates(int chunkX, int chunkZ)

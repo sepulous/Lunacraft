@@ -1,4 +1,4 @@
-Shader "Custom/CrystalShader"
+Shader "Custom/SulphurCrystalShader"
 {
     Properties
     {
@@ -18,8 +18,8 @@ Shader "Custom/CrystalShader"
             Stencil
             {
                 Ref 1
-                Comp NotEqual
-                Pass Replace
+                Comp GEqual
+                Pass Keep
             }
 
             Name "ForwardLit"
@@ -50,7 +50,6 @@ Shader "Custom/CrystalShader"
                 float4 positionHCS : SV_POSITION;
                 float3 positionWS  : TEXCOORD0;
                 float2 uv          : TEXCOORD1;
-                float  fogFactor   : TEXCOORD2;
             };
 
             v2f vert(VertexData IN)
@@ -69,10 +68,7 @@ Shader "Custom/CrystalShader"
                 float correctedIntensity = saturate(length(mainLight.color) + 0.2);
                 float4 textureColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv);
 
-                //return half4(textureColor.rgb * correctedIntensity, textureColor.a);
-                //return lerp(half4(0.3, 0, 1, 1), half4(textureColor.rgb * correctedIntensity, textureColor.a), i.fogFactor); // Apply fog
-
-                float viewDistance = length(_WorldSpaceCameraPos - i.positionWS) - 20;
+                float viewDistance = length(_WorldSpaceCameraPos - i.positionWS) - 40;
                 float fogFactor = saturate(exp(-0.12 * viewDistance));
                 half4 halfFogColor = half4(unity_FogColor.rgb, 1);
                 half4 halfTextureColor = half4(textureColor.rgb * correctedIntensity, textureColor.a);

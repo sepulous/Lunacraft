@@ -61,7 +61,10 @@ public class MeshData
             }
             else if (blockName.EndsWith("crystal"))
             {
-                material = new Material(Shader.Find("Custom/CrystalShader"));
+                if (blockName == "sulphur_crystal")
+                    material = new Material(Shader.Find("Custom/SulphurCrystalShader"));
+                else
+                    material = new Material(Shader.Find("Custom/BoronBlueCrystalShader"));
                 material.SetTexture("_MainTex", texture);
             }
             else if (blockName == "light")

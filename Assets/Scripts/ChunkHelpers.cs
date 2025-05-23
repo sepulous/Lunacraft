@@ -979,113 +979,100 @@ public class ChunkHelpers
         }
     };
 
-    public static void SaveChunkToFile(BlockID[,,] chunk, int moon, int chunkX, int chunkZ)
+    public static void SaveChunkToFile(byte[] chunk, int moon, int chunkX, int chunkZ)
     {
         ulong chunkID = CombineChunkCoordinates(chunkX, chunkZ);
-        string chunkFilePath = string.Format("{0}/moons/moon{1}/chunks/{2}.sb", Application.persistentDataPath, moon, chunkID);
-
-        byte[] chunk1D = new byte[GameData.CHUNK_SIZE * GameData.CHUNK_SIZE * GameData.WORLD_HEIGHT_LIMIT];
-        int index = 0;
-        for (int x = 0; x < GameData.CHUNK_SIZE; x++)
-            for (int z = 0; z < GameData.CHUNK_SIZE; z++)
-                for (int y = 0; y < GameData.WORLD_HEIGHT_LIMIT; y++)
-                    chunk1D[index++] = (byte)chunk[x,z,y];
-
+        string chunkFilePath = $"{Application.persistentDataPath}/moons/moon{moon}/chunks/{chunkID}.sb";
         using (FileStream chunkFile = new FileStream(chunkFilePath, FileMode.Create, FileAccess.Write))
-            chunkFile.Write(chunk1D, 0, chunk1D.Length);
+            chunkFile.Write(chunk, 0, GameData.CHUNK_SIZE * GameData.CHUNK_SIZE * GameData.WORLD_HEIGHT_LIMIT);
     }
 
     public static bool ChunkFileExists(int moon, int chunkX, int chunkZ)
     {
         ulong chunkID = CombineChunkCoordinates(chunkX, chunkZ);
-        string chunkFilePath = string.Format("{0}/moons/moon{1}/chunks/{2}.sb", Application.persistentDataPath, moon, chunkID);
-        return File.Exists(chunkFilePath);
+        return File.Exists($"{Application.persistentDataPath}/moons/moon{moon}/chunks/{chunkID}.sb");
     }
 
-    public static void GetChunkFromFile(BlockID[,,] chunk, int moon, int chunkX, int chunkZ)
+    public static void GetChunkFromFile(byte[] chunk, int moon, int chunkX, int chunkZ)
     {
         ulong chunkID = CombineChunkCoordinates(chunkX, chunkZ);
-        string chunkFilePath = string.Format("{0}/moons/moon{1}/chunks/{2}.sb", Application.persistentDataPath, moon, chunkID);
-
-        byte[] chunk1D = new byte[GameData.CHUNK_SIZE * GameData.CHUNK_SIZE * GameData.WORLD_HEIGHT_LIMIT];
-        
+        string chunkFilePath = $"{Application.persistentDataPath}/moons/moon{moon}/chunks/{chunkID}.sb";
         using (FileStream chunkFile = new FileStream(chunkFilePath, FileMode.Open, FileAccess.Read))
-            chunkFile.Read(chunk1D, 0, chunk1D.Length);
-
-        int index = 0;
-        for (int x = 0; x < GameData.CHUNK_SIZE; x++)
-            for (int z = 0; z < GameData.CHUNK_SIZE; z++)
-                for (int y = 0; y < GameData.WORLD_HEIGHT_LIMIT; y++)
-                    chunk[x,z,y] = (BlockID)chunk1D[index++];
+            chunkFile.Read(chunk, 0, GameData.CHUNK_SIZE * GameData.CHUNK_SIZE * GameData.WORLD_HEIGHT_LIMIT);
     }
 
-    public static void GenerateChunk(BlockID[,,] chunk, int chunkX, int chunkZ, MoonData moonData)
+    public static int GetChunkIndex(int x, int y, int z)
+    {
+        // Loop order when generating: x (outer), z, y (inner)
+        return y + GameData.WORLD_HEIGHT_LIMIT*z + (GameData.WORLD_HEIGHT_LIMIT*GameData.CHUNK_SIZE)*x;
+    }
+
+    public static void GenerateChunk(byte[] chunk, int chunkX, int chunkZ, MoonData moonData)
     {
         //
         // Generate terrain
         //
-        float rockHeightFrequency = 0.3F + 0.05F*moonData.terrainRoughness;
-        int[] rockHeightMap   = GenerateHeightMap(0, chunkX, chunkZ, moonData.seed, 16F, 0.4F, rockHeightFrequency, 4);
-        int[] gravelHeightMap = GenerateHeightMap(1, chunkX, chunkZ, moonData.seed, 4F, 0.4F, 0.6F, 2);
-        int[] dirtHeightMap   = GenerateHeightMap(2, chunkX, chunkZ, moonData.seed, 3F, 0.4F, 0.4F, 3);
-        int[] sandHeightMap   = GenerateHeightMap(3, chunkX, chunkZ, moonData.seed, 2F, 0.4F, 0.8F, 2);
+        int[] rockHeightMap = GenerateHeightMap(0, chunkX, chunkZ, moonData.seed, 16F, 0.4F, 0.4F, 4, moonData.terrainRoughness);
+        int[] gravelHeightMap = GenerateHeightMap(1, chunkX, chunkZ, moonData.seed, 4F, 0.4F, 0.6F, 2, moonData.terrainRoughness);
+        int[] dirtHeightMap = GenerateHeightMap(2, chunkX, chunkZ, moonData.seed, 3F, 0.4F, 0.4F, 3, moonData.terrainRoughness);
+        int[] sandHeightMap = GenerateHeightMap(3, chunkX, chunkZ, moonData.seed, 2F, 0.4F, 0.8F, 2, moonData.terrainRoughness);
 
+        int chunkIndex = 0;
         for (int x = 0; x < GameData.CHUNK_SIZE; x++)
         {
             for (int z = 0; z < GameData.CHUNK_SIZE; z++)
             {
-                int rockHeightLimit   = rockHeightMap[z + GameData.CHUNK_SIZE*x];
-                int gravelHeightLimit = gravelHeightMap[z + GameData.CHUNK_SIZE*x];
-                int dirtHeightLimit   = dirtHeightMap[z + GameData.CHUNK_SIZE*x];
-                int sandHeightLimit   = sandHeightMap[z + GameData.CHUNK_SIZE*x];
+                int rockHeightLimit = rockHeightMap[z + GameData.CHUNK_SIZE * x];
+                int gravelHeightLimit = gravelHeightMap[z + GameData.CHUNK_SIZE * x];
+                int dirtHeightLimit = dirtHeightMap[z + GameData.CHUNK_SIZE * x];
+                int sandHeightLimit = sandHeightMap[z + GameData.CHUNK_SIZE * x];
                 int y = 0;
-
-                // public static void Fill<T>(T[] array, T value, int startIndex, int count);
 
                 // Base rock
                 while (y < 50 + rockHeightLimit)
                 {
-                    chunk[x,z,y] = BlockID.rock;
+                    chunk[chunkIndex++] = (byte)BlockID.rock;
                     y++;
                 }
 
                 // Base gravel
                 while (y < 50 + rockHeightLimit + gravelHeightLimit)
                 {
-                    chunk[x,z,y] = BlockID.gravel;
+                    chunk[chunkIndex++] = (byte)BlockID.gravel;
                     y++;
                 }
 
                 // Base dirt
                 while (y < 50 + rockHeightLimit + gravelHeightLimit + dirtHeightLimit)
                 {
-                    chunk[x,z,y] = BlockID.dirt;
+                    chunk[chunkIndex++] = (byte)BlockID.dirt;
                     y++;
                 }
 
+                int terrainTop;
                 if (50 + rockHeightLimit + gravelHeightLimit + dirtHeightLimit < GameData.GROUND_LEVEL) // Below ground level; fill rest in with sand/water
                 {
                     while (y < GameData.GROUND_LEVEL && y < 50 + rockHeightLimit + gravelHeightLimit + dirtHeightLimit + sandHeightLimit)
                     {
-                        chunk[x,z,y] = BlockID.sand;
+                        chunk[chunkIndex++] = (byte)BlockID.sand;
                         y++;
                     }
 
                     while (y < GameData.GROUND_LEVEL)
                     {
-                        chunk[x,z,y] = BlockID.water;
+                        chunk[chunkIndex++] = (byte)BlockID.water;
                         y++;
                     }
                 }
                 else // Above ground level; finish terrain by placing topsoil
                 {
-                    chunk[x,z,y] = BlockID.topsoil;
+                    chunk[chunkIndex++] = (byte)BlockID.topsoil;
                     y++;
                 }
 
                 while (y < GameData.WORLD_HEIGHT_LIMIT)
                 {
-                    chunk[x,z,y] = BlockID.air;
+                    chunk[chunkIndex++] = (byte)BlockID.air;
                     y++;
                 }
             }
@@ -1107,7 +1094,8 @@ public class ChunkHelpers
             int seedBlockY = -1;
             for (int y = 63; y < GameData.WORLD_HEIGHT_LIMIT; y++)
             {
-                if (chunk[seedBlockX, seedBlockZ, y+1] == BlockID.air)
+                chunkIndex = GetChunkIndex(seedBlockX, y + 1, seedBlockZ);
+                if (chunk[chunkIndex] == (byte)BlockID.air)
                 {
                     seedBlockY = y;
                     break;
@@ -1151,7 +1139,8 @@ public class ChunkHelpers
             int currentBlockX = seedBlockX;
             int currentBlockY = seedBlockY;
             int currentBlockZ = seedBlockZ;
-            chunk[seedBlockX, seedBlockZ, seedBlockY] = oreID;
+            chunkIndex = GetChunkIndex(seedBlockX, seedBlockY, seedBlockZ);
+            chunk[chunkIndex] = (byte)oreID;
             for (int count = 0; count < veinSize; count++)
             {
                 int nextDirection = UnityEngine.Random.Range(1, 6);
@@ -1176,9 +1165,9 @@ public class ChunkHelpers
                     currentBlockY--;
                 }
 
-                BlockID currentBlockID = chunk[currentBlockX, currentBlockZ, currentBlockY];
-                if (currentBlockID != BlockID.air)
-                    chunk[currentBlockX, currentBlockZ, currentBlockY] = oreID;
+                chunkIndex = GetChunkIndex(currentBlockX, currentBlockY, currentBlockZ);
+                if (chunk[chunkIndex] != (byte)BlockID.air)
+                    chunk[chunkIndex] = (byte)oreID;
             }
         }
 
@@ -1194,7 +1183,8 @@ public class ChunkHelpers
             int centerBlockY = -1;
             for (int y = 64; y < GameData.WORLD_HEIGHT_LIMIT; y++)
             {
-                if (chunk[centerBlockX, centerBlockZ, y+1] == BlockID.air)
+                chunkIndex = GetChunkIndex(centerBlockX, y + 1, centerBlockZ);
+                if (chunk[chunkIndex] == (byte)BlockID.air)
                 {
                     centerBlockY = y;
                     break;
@@ -1208,13 +1198,15 @@ public class ChunkHelpers
                 {
                     for (int yOffset = -6; yOffset <= lairDepth; yOffset++)
                     {
-                        chunk[centerBlockX + xOffset, centerBlockZ + zOffset, centerBlockY - yOffset] = BlockID.air;
+                        chunkIndex = GetChunkIndex(centerBlockX + xOffset, centerBlockY - yOffset, centerBlockZ + zOffset);
+                        chunk[chunkIndex] = (byte)BlockID.air;
                     }
                 }
             }
 
             // Place light block at center of bottom so I can easily check whether a chunk contains an astronaut lair for faster rendering
-            chunk[centerBlockX, centerBlockZ, 0] = BlockID.gravel;
+            chunkIndex = GetChunkIndex(centerBlockX, 0, centerBlockZ);
+            chunk[chunkIndex] = (byte)BlockID.gravel;
 
             // Decorate with polymer and light
             bool leftSideDone = false;
@@ -1223,44 +1215,48 @@ public class ChunkHelpers
             bool backSideDone = false;
             for (int y = centerBlockY - lairDepth; y < GameData.WORLD_HEIGHT_LIMIT; y++)
             {
-                if (chunk[centerBlockX - 4, centerBlockZ, y] != BlockID.air && !leftSideDone)
+                chunkIndex = GetChunkIndex(centerBlockX - 4, y, centerBlockZ);
+                if (chunk[chunkIndex] != (byte)BlockID.air && !leftSideDone)
                 {
-                    chunk[centerBlockX - 4, centerBlockZ, y] = BlockID.polymer;
+                    chunk[chunkIndex] = (byte)BlockID.polymer;
                     if ((y - (centerBlockY - lairDepth)) % 8 == 0)
-                        chunk[centerBlockX - 4, centerBlockZ, y] = BlockID.light;
+                        chunk[chunkIndex] = (byte)BlockID.light;
                 }
                 else
                 {
                     leftSideDone = true;
                 }
-                
-                if (chunk[centerBlockX + 4, centerBlockZ, y] != BlockID.air && !rightSideDone)
+
+                chunkIndex = GetChunkIndex(centerBlockX + 4, y, centerBlockZ);
+                if (chunk[chunkIndex] != (byte)BlockID.air && !rightSideDone)
                 {
-                    chunk[centerBlockX + 4, centerBlockZ, y] = BlockID.polymer;
+                    chunk[chunkIndex] = (byte)BlockID.polymer;
                     if ((y - (centerBlockY - lairDepth)) % 8 == 0)
-                        chunk[centerBlockX + 4, centerBlockZ, y] = BlockID.light;
+                        chunk[chunkIndex] = (byte)BlockID.light;
                 }
                 else
                 {
                     rightSideDone = true;
                 }
 
-                if (chunk[centerBlockX, centerBlockZ + 4, y] != BlockID.air && !frontSideDone)
+                chunkIndex = GetChunkIndex(centerBlockX, y, centerBlockZ + 4);
+                if (chunk[chunkIndex] != (byte)BlockID.air && !frontSideDone)
                 {
-                    chunk[centerBlockX, centerBlockZ + 4, y] = BlockID.polymer;
+                    chunk[chunkIndex] = (byte)BlockID.polymer;
                     if ((y - (centerBlockY - lairDepth)) % 8 == 0)
-                        chunk[centerBlockX, centerBlockZ + 4, y] = BlockID.light;
+                        chunk[chunkIndex] = (byte)BlockID.light;
                 }
                 else
                 {
                     frontSideDone = true;
                 }
 
-                if (chunk[centerBlockX, centerBlockZ - 4, y] != BlockID.air && !backSideDone)
+                chunkIndex = GetChunkIndex(centerBlockX, y, centerBlockZ - 4);
+                if (chunk[chunkIndex] != (byte)BlockID.air && !backSideDone)
                 {
-                    chunk[centerBlockX, centerBlockZ - 4, y] = BlockID.polymer;
+                    chunk[chunkIndex] = (byte)BlockID.polymer;
                     if ((y - (centerBlockY - lairDepth)) % 8 == 0)
-                        chunk[centerBlockX, centerBlockZ - 4, y] = BlockID.light;
+                        chunk[chunkIndex] = (byte)BlockID.light;
                 }
                 else
                 {
@@ -1297,9 +1293,10 @@ public class ChunkHelpers
             int baseBlockY;
             for (int y = 63; y < GameData.WORLD_HEIGHT_LIMIT; y++)
             {
-                if (chunk[baseBlockX, baseBlockZ, y+1] == BlockID.air)
+                chunkIndex = GetChunkIndex(baseBlockX, y, baseBlockZ);
+                if (chunk[chunkIndex + 1] == (byte)BlockID.air)
                 {
-                    if (chunk[baseBlockX, baseBlockZ, y] == BlockID.topsoil || chunk[baseBlockX, baseBlockZ, y] == BlockID.sand)
+                    if (chunk[chunkIndex] == (byte)BlockID.topsoil || chunk[chunkIndex] == (byte)BlockID.sand)
                     {
                         baseBlockY = y;
                         for (int i = 1; i < shapeOffsets.Length; i++)
@@ -1312,7 +1309,8 @@ public class ChunkHelpers
                             else if (crystalPlantOrientation == 4) // 270 degrees
                                 (offsetX, offsetZ) = (offsetZ, -offsetX);
 
-                            chunk[baseBlockX + offsetX, baseBlockZ + offsetZ, baseBlockY + offsetY] = crystal;
+                            chunkIndex = GetChunkIndex(baseBlockX + offsetX, baseBlockY + offsetY, baseBlockZ + offsetZ);
+                            chunk[chunkIndex] = (byte)crystal;
                         }
                     }
                     break;
@@ -1340,7 +1338,7 @@ public class ChunkHelpers
             {
                 treeShape = UnityEngine.Random.Range(0, COLOR_WOOD_TREE_SHAPES.Length);
                 treeData = COLOR_WOOD_TREE_SHAPES[treeShape];
-                
+
             }
             else // Spiral light tree
             {
@@ -1354,12 +1352,12 @@ public class ChunkHelpers
             int baseBlockY;
             for (int y = 63; y < GameData.WORLD_HEIGHT_LIMIT; y++)
             {
-                if (chunk[baseBlockX, baseBlockZ, y+1] == BlockID.air)
+                chunkIndex = GetChunkIndex(baseBlockX, y, baseBlockZ);
+                if (chunk[chunkIndex + 1] == (byte)BlockID.air)
                 {
-                    if (chunk[baseBlockX, baseBlockZ, y] == BlockID.topsoil || chunk[baseBlockX, baseBlockZ, y] == BlockID.sand)
+                    if (chunk[chunkIndex] == (byte)BlockID.topsoil || chunk[chunkIndex] == (byte)BlockID.sand)
                     {
                         baseBlockY = y;
-                        //chunk[baseBlockX, baseBlockY, baseBlockZ] = BlockID.notchium;
                         for (int j = 1; j < treeData.Length; j++)
                         {
                             (BlockID treeBlock, int offsetX, int offsetY, int offsetZ) = treeData[j];
@@ -1369,8 +1367,9 @@ public class ChunkHelpers
                                 (offsetX, offsetZ) = (-offsetX, -offsetZ);
                             else if (treeOrientation == 4) // 270 degrees
                                 (offsetX, offsetZ) = (offsetZ, -offsetX);
-                            
-                            chunk[baseBlockX + offsetX, baseBlockZ + offsetZ, baseBlockY + offsetY] = treeBlock;
+
+                            chunkIndex = GetChunkIndex(baseBlockX + offsetX, baseBlockY + offsetY, baseBlockZ + offsetZ);
+                            chunk[chunkIndex] = (byte)treeBlock;
                         }
                     }
                     break;
@@ -1383,31 +1382,60 @@ public class ChunkHelpers
         //
         if (moonData.wildlifeLevel > 0)
         {
-            int mobSpawnChance = UnityEngine.Random.Range(0, 10 - 2*moonData.wildlifeLevel);
-            if (mobSpawnChance == 0)
-            {
-                int mobCount = UnityEngine.Random.Range(1, moonData.wildlifeLevel + 1);
-                MobData[] mobs = new MobData[mobCount];
-                for (int i = 0; i < mobCount; i++)
-                {
-                    int mobType = UnityEngine.Random.Range(1, 101);
-                    if (mobType <= 30)
-                        mobType = 0;
-                    else if (mobType <= 60)
-                        mobType = 1;
-                    else if (mobType <= 90)
-                        mobType = 2;
-                    else
-                        mobType = 3;
+            float mobSpawnChance = UnityEngine.Random.Range(0F, 1F);
+            bool spawnMobs = true;
+            if (moonData.wildlifeLevel == 1)
+                spawnMobs = mobSpawnChance > 0.8F;
+            else if (moonData.wildlifeLevel == 2)
+                spawnMobs = mobSpawnChance > 0.7F;
+            else if (moonData.wildlifeLevel == 3)
+                spawnMobs = mobSpawnChance > 0.5F;
+            else
+                spawnMobs = mobSpawnChance > 0.4F;
 
-                    if (mobType == 0 || mobType == 1) // Green/brown mobs (green ~ 0, brown ~ 1)
+            if (spawnMobs)
+            {
+                int mobGroupCount = Mathf.Clamp(UnityEngine.Random.Range(0, moonData.wildlifeLevel + 1), 0, 2);
+                List<(int, int)> mobGroups = new List<(int, int)>();
+                int mobCount = 0;
+                for (int i = 0; i < mobGroupCount; i++)
+                {
+                    // 0 - green (single), 1 - brown (single), 2 - giraffe (group), 3 - astronaut (group)
+                    int mobGroupType = UnityEngine.Random.Range(1, 101);
+                    if (mobGroupType <= 70)
+                        mobGroupType = 0;
+                    else if (mobGroupType <= 95)
+                        mobGroupType = 1;
+                    else
+                        mobGroupType = 2;
+
+                    if (mobGroupType == 0 || mobGroupType == 1)
+                    {
+                        mobGroups.Add((mobGroupType, 1));
+                        mobCount++;
+                    }
+                    else
+                    {
+                        int groupCount = UnityEngine.Random.Range(1, 5);
+                        mobGroups.Add((mobGroupType, groupCount));
+                        mobCount += groupCount;
+                    }
+                }
+
+                float[] mobData = new float[mobCount * 6];
+                int mobDataIndex = 0;
+                for (int i = 0; i < mobGroups.Count; i++)
+                {
+                    int mobType = mobGroups[i].Item1;
+                    if (mobType == 0 || mobType == 1) // Green/brown mob
                     {
                         int localPosX = UnityEngine.Random.Range(2, GameData.CHUNK_SIZE - 2);
                         int localPosZ = UnityEngine.Random.Range(2, GameData.CHUNK_SIZE - 2);
                         int localPosY = 0;
+                        chunkIndex = GetChunkIndex(localPosX, 63, localPosZ); // Incrementing y just adds 1 to chunkIndex. No need to recalculate each iteration.
                         for (int j = 63; j < GameData.WORLD_HEIGHT_LIMIT; j++)
                         {
-                            if (chunk[localPosX, localPosZ, j] == BlockID.air)
+                            if (chunk[chunkIndex++] == (byte)BlockID.air)
                             {
                                 localPosY = j;
                                 break;
@@ -1415,34 +1443,32 @@ public class ChunkHelpers
                         }
 
                         Vector3 globalPos = new Vector3(
-                            chunkX*GameData.CHUNK_SIZE + localPosX,
+                            chunkX * GameData.CHUNK_SIZE + localPosX,
                             localPosY,
-                            chunkZ*GameData.CHUNK_SIZE + localPosZ
+                            chunkZ * GameData.CHUNK_SIZE + localPosZ
                         );
 
-                        MobData mobData = new MobData();
-                        mobData.mobID = mobType;
-                        mobData.astronautType = AstronautType.WHITE; // Doesn't matter
-                        mobData.positionX = globalPos.x;
-                        mobData.positionY = globalPos.y + 1;
-                        mobData.positionZ = globalPos.z;
-                        mobData.rotationY = 0;
-                        mobData.aggressive = false;
-                        mobs[i] = mobData;
+                        mobData[mobDataIndex++] = (float)mobType;
+                        mobData[mobDataIndex++] = 0; // Not aggressive
+                        mobData[mobDataIndex++] = globalPos.x;
+                        mobData[mobDataIndex++] = globalPos.y;
+                        mobData[mobDataIndex++] = globalPos.z;
+                        mobData[mobDataIndex++] = 0; // Y rotation = 0 by default
                     }
                     else if (mobType == 2) // Giraffe herd
                     {
-                        int herdSize = UnityEngine.Random.Range(1, (int)Mathf.Min(5, mobCount - i));
+                        int herdSize = mobGroups[i].Item2;
                         int herdCenterX = UnityEngine.Random.Range(2, GameData.CHUNK_SIZE - 2);
                         int herdCenterZ = UnityEngine.Random.Range(2, GameData.CHUNK_SIZE - 2);
                         for (int j = 0; j < herdSize; j++)
                         {
-                            int giraffePosX = herdCenterX + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterX), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterX));
-                            int giraffePosZ = herdCenterZ + UnityEngine.Random.Range(Mathf.Max(-5, -herdCenterZ), Mathf.Min(6, GameData.CHUNK_SIZE - herdCenterZ));
+                            int giraffePosX = herdCenterX + UnityEngine.Random.Range(Mathf.Max(-2, -herdCenterX), Mathf.Min(3, GameData.CHUNK_SIZE - herdCenterX));
+                            int giraffePosZ = herdCenterZ + UnityEngine.Random.Range(Mathf.Max(-2, -herdCenterZ), Mathf.Min(3, GameData.CHUNK_SIZE - herdCenterZ));
                             int giraffePosY = 0;
+                            chunkIndex = GetChunkIndex(giraffePosX, 63, giraffePosZ); // Incrementing y just adds 1 to chunkIndex. No need to recalculate each iteration.
                             for (int k = 63; k < GameData.WORLD_HEIGHT_LIMIT; k++)
                             {
-                                if (chunk[giraffePosX, giraffePosZ, k] == BlockID.air)
+                                if (chunk[chunkIndex++] == (byte)BlockID.air)
                                 {
                                     giraffePosY = k + 2;
                                     break;
@@ -1450,42 +1476,36 @@ public class ChunkHelpers
                             }
 
                             Vector3 globalPos = new Vector3(
-                                chunkX*GameData.CHUNK_SIZE + giraffePosX,
+                                chunkX * GameData.CHUNK_SIZE + giraffePosX,
                                 giraffePosY,
-                                chunkZ*GameData.CHUNK_SIZE + giraffePosZ
+                                chunkZ * GameData.CHUNK_SIZE + giraffePosZ
                             );
 
-                            MobData mobData = new MobData();
-                            mobData.mobID = mobType;
-                            mobData.astronautType = AstronautType.WHITE; // Doesn't matter
-                            mobData.positionX = globalPos.x;
-                            mobData.positionY = globalPos.y;
-                            mobData.positionZ = globalPos.z;
-                            mobData.rotationY = 0;
-                            mobData.aggressive = false;
-                            mobs[i + j] = mobData;
+                            mobData[mobDataIndex++] = (float)mobType;
+                            mobData[mobDataIndex++] = 0; // Not aggressive
+                            mobData[mobDataIndex++] = globalPos.x;
+                            mobData[mobDataIndex++] = globalPos.y;
+                            mobData[mobDataIndex++] = globalPos.z;
+                            mobData[mobDataIndex++] = 0; // Y rotation = 0 by default
                         }
-                        i += herdSize;
-                    }
-                    else // Astronaut(s)
-                    {
-
                     }
                 }
-                MobHelpers.SaveMobsToChunk(mobs, moonData.moon, chunkX, chunkZ);
+
+                MobHelpers.SaveMobsToChunk(mobData, moonData.moon, chunkX, chunkZ);
             }
         }
 
         UnityEngine.Random.state = initialRandomState; // Reset so we don't interfere with anything else (but maybe every use of Random should be based on the seed?)
     }
 
-    private static int[] GenerateHeightMap(int heightMapIndex, int chunkX, int chunkZ, ulong seed, float amplitude, float frequency, float persistence, int octaves)
+    private static int[] GenerateHeightMap(int heightMapIndex, int chunkX, int chunkZ, ulong seed, float amplitude, float frequency, float persistence, int octaves, int terrainRoughness)
     {
         int[] heightMap = HEIGHT_MAPS[heightMapIndex];
         float frequency0 = frequency;
         float amplitude0 = amplitude;
         uint xSeed = (uint)((seed & 0b1010101010101010101010101010101010101010101010101010101010101010) >> 48);
         uint zSeed = (uint)((seed & 0b0101010101010101010101010101010101010101010101010101010101010101) >> 48);
+        float divFactor = 32F - 4F*terrainRoughness;
         float heightLimit;
         for (int x = 0; x < GameData.CHUNK_SIZE; x++)
         {
@@ -1496,8 +1516,8 @@ public class ChunkHelpers
                 heightLimit = 0F;
                 for (int i = 0; i < octaves; i++)
                 {
-                    float xArg = (((x + chunkX*GameData.CHUNK_SIZE) + xSeed) / 32F) * frequency; // TODO: FIGURE OUT WHAT 16F IS (I think it's just to prevent overflows), or grid size
-                    float zArg = (((z + chunkZ*GameData.CHUNK_SIZE) + zSeed) / 32F) * frequency; //
+                    float xArg = (((x + chunkX*GameData.CHUNK_SIZE) + xSeed) / divFactor) * frequency;
+                    float zArg = (((z + chunkZ*GameData.CHUNK_SIZE) + zSeed) / divFactor) * frequency;
                     heightLimit += Mathf.PerlinNoise(xArg, zArg) * amplitude;
                     frequency *= 3F;
                     amplitude *= persistence;
@@ -1590,23 +1610,23 @@ public class ChunkHelpers
         int idCheck = (block == BlockID.water) ? 37 : 36;
 
         // Top check
-        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[localBlockX, localBlockZ, localBlockY + 1] > idCheck)
+        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[GetChunkIndex(localBlockX, localBlockY + 1, localBlockZ)] > idCheck)
             return true;
 
         // Bottom check
-        if (localBlockY > 0 && (int)chunkData.blocks[localBlockX, localBlockZ, localBlockY - 1] > idCheck)
+        if (localBlockY > 0 && (int)chunkData.blocks[GetChunkIndex(localBlockX, localBlockY - 1, localBlockZ)] > idCheck)
             return true;
 
         // Front and back checks
-        backTest = (int)chunkData.blocks[localBlockX, localBlockZ - 1, localBlockY] > idCheck;
-        frontTest = (int)chunkData.blocks[localBlockX, localBlockZ + 1, localBlockY] > idCheck;
+        backTest = (int)chunkData.blocks[GetChunkIndex(localBlockX, localBlockY, localBlockZ - 1)] > idCheck;
+        frontTest = (int)chunkData.blocks[GetChunkIndex(localBlockX, localBlockY, localBlockZ + 1)] > idCheck;
 
         if (frontTest || backTest)
             return true;
 
         // Left and right checks
-        leftTest = (int)chunkData.blocks[localBlockX - 1, localBlockZ, localBlockY] > idCheck;
-        rightTest = (int)chunkData.blocks[localBlockX + 1, localBlockZ, localBlockY] > idCheck;
+        leftTest = (int)chunkData.blocks[GetChunkIndex(localBlockX - 1, localBlockY, localBlockZ)] > idCheck;
+        rightTest = (int)chunkData.blocks[GetChunkIndex(localBlockX + 1, localBlockY, localBlockZ)] > idCheck;
 
         return leftTest || rightTest;
     }
@@ -1622,37 +1642,28 @@ public class ChunkHelpers
 
         int idCheck = (block == BlockID.water) ? 37 : 36;
 
-        // Top and bottom checks (BlockID.rock is just a lazy way of not rendering invalid y positions)
-        // BlockID topBlock = (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1) ? chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] : BlockID.rock;
-        // topTest = (int)topBlock > 36;
-        //topTest = (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1) ? (int)chunkData.blocks[localBlockX, localBlockY + 1, localBlockZ] > 36 : false;
-        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[localBlockX, localBlockZ, localBlockY + 1] > idCheck)
+        if (localBlockY < GameData.WORLD_HEIGHT_LIMIT - 1 && (int)chunkData.blocks[GetChunkIndex(localBlockX, localBlockY + 1, localBlockZ)] > idCheck)
             return true;
 
-        // BlockID bottomBlock = (localBlockY > 0) ? chunkData.blocks[localBlockX, localBlockY - 1, localBlockZ] : BlockID.rock;
-        // bottomTest = (int)bottomBlock > 36;
-        if (localBlockY > 0 && (int)chunkData.blocks[localBlockX, localBlockZ, localBlockY - 1] > idCheck)
+        if (localBlockY > 0 && (int)chunkData.blocks[GetChunkIndex(localBlockX, localBlockY - 1, localBlockZ)] > idCheck)
             return true;
-
-        // if (topTest || bottomTest)
-        //     return true;
 
         // Front and back checks
-        BlockID backBlock = (localBlockZ == 0) ? adjacentChunkData[3].blocks[localBlockX, GameData.CHUNK_SIZE - 1, localBlockY] : chunkData.blocks[localBlockX, localBlockZ - 1, localBlockY];
-        backTest = (int)backBlock > idCheck;
+        byte backBlock = (localBlockZ == 0) ? adjacentChunkData[3].blocks[GetChunkIndex(localBlockX, localBlockY, GameData.CHUNK_SIZE - 1)] : chunkData.blocks[GetChunkIndex(localBlockX, localBlockY, localBlockZ - 1)];
+        backTest = backBlock > idCheck;
 
-        BlockID frontBlock = (localBlockZ == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[2].blocks[localBlockX, 0, localBlockY] : chunkData.blocks[localBlockX, localBlockZ + 1, localBlockY];
-        frontTest = (int)frontBlock > idCheck;
+        byte frontBlock = (localBlockZ == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[2].blocks[GetChunkIndex(localBlockX, localBlockY, 0)] : chunkData.blocks[GetChunkIndex(localBlockX, localBlockY, localBlockZ + 1)];
+        frontTest = frontBlock > idCheck;
 
         if (frontTest || backTest)
             return true;
 
         // Left and right checks
-        BlockID leftBlock = (localBlockX == 0) ? adjacentChunkData[0].blocks[GameData.CHUNK_SIZE - 1, localBlockZ, localBlockY] : chunkData.blocks[localBlockX - 1, localBlockZ, localBlockY];
-        leftTest = (int)leftBlock > idCheck;
+        byte leftBlock = (localBlockX == 0) ? adjacentChunkData[0].blocks[GetChunkIndex(GameData.CHUNK_SIZE - 1, localBlockY, localBlockZ)] : chunkData.blocks[GetChunkIndex(localBlockX - 1, localBlockY, localBlockZ)];
+        leftTest = leftBlock > idCheck;
 
-        BlockID rightBlock = (localBlockX == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[1].blocks[0, localBlockZ, localBlockY] : chunkData.blocks[localBlockX + 1, localBlockZ, localBlockY];
-        rightTest = (int)rightBlock > idCheck;
+        byte rightBlock = (localBlockX == GameData.CHUNK_SIZE - 1) ? adjacentChunkData[1].blocks[GetChunkIndex(0, localBlockY, localBlockZ)] : chunkData.blocks[GetChunkIndex(localBlockX + 1, localBlockY, localBlockZ)];
+        rightTest = rightBlock > idCheck;
 
         return leftTest || rightTest;
     }
